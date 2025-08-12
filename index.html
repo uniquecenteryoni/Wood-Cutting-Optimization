@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>אופטימיזציית חיתוך עץ</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- external libs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-left">
+      <button id="btn-lang" class="btn">english</button>
+      <button id="btn-currency" class="btn">€</button>
+      <button id="btn-units" class="btn">m</button>
+    </div>
+    <h1 class="site-title" data-i18n="title">אופטימיזציית חיתוך עץ</h1>
+  </header>
+
+  <main class="container">
+    <!-- Block 1: Project Requirements -->
+    <section id="block-req" class="card">
+      <div class="card-head">
+        <h2 data-i18n="reqs">דרישות פרויקט</h2>
+    <div class="small-controls">
+          <div class="inline">
+            <input id="project-name" placeholder="שם הפרויקט" data-i18n-placeholder="projectName" />
+      <button id="project-name-ok" class="btn" data-i18n="save" title="שמור">שמור</button>
+          </div>
+          <label class="inline"><span data-i18n="sawThickness">עובי מסור</span>
+            <input id="saw-thickness" type="number" min="0" step="0.1" value="3" />
+            <span id="saw-unit" class="chip">mm</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="requirements-list"></div>
+
+      <div class="actions">
+        <button id="add-req" class="btn" data-i18n="addReq">הוסף דרישה</button>
+        <button id="calc-opt" class="btn primary" data-i18n="calcOpt">חשב אופטימיזציה</button>
+      </div>
+    </section>
+
+    <!-- Block 2: Timber Database -->
+    <section id="block-db" class="card">
+      <div class="card-head">
+        <h2 data-i18n="db" style="white-space:nowrap;">מאגר עצים</h2>
+      </div>
+      <div class="db-head" style="display:flex; justify-content:space-between; align-items:center; gap:8px; width:100%; margin-top:8px;">
+        <div class="db-right" style="display:flex; align-items:center; gap:8px;">
+          <button id="toggle-db" class="btn" data-i18n="showDb">הצג מאגר עצים</button>
+          <label class="btn file-btn">
+            <input id="file-input" type="file" accept=".csv,.xlsx,.xls" />
+            <span data-i18n="loadFile">טען קובץ מאגר עצים</span>
+          </label>
+        </div>
+        <div class="db-left" style="display:flex; align-items:center;">
+          <div id="db-status" class="db-status" style="min-height:18px; color:#2e7d32; white-space:nowrap;"></div>
+        </div>
+      </div>
+
+      <div id="db-area" class="db-area hidden">
+        <div class="db-controls" style="margin-bottom:12px">
+          <button id="add-db-row" class="btn" data-i18n="addTree">הוסף עץ למאגר</button>
+        </div>
+        <div id="db-table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- Block 3: Results -->
+    <section id="block-res" class="card">
+      <h2 data-i18n="results">תוצאות</h2>
+      <div id="results-area">
+        <p data-i18n="noResults">אין תוצאות עדיין. לחץ "חשב אופטימיזציה" כדי להתחיל.</p>
+      </div>
+  <div class="actions actions-center">
+        <button id="export-pdf" class="btn pink" data-i18n="exportPdf">סכם בקובץ PDF</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>Made with ♥ — Wood Optimizer</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

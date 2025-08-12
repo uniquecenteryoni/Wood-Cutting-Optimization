@@ -1,0 +1,46 @@
+:root{--bg:#f6f3ef;--card:#fff;--muted:#5b5b5b;--accent:#b57b6d;--primary:#6a8f6b;--head1:#f0eadf;--head2:#e6efe6;--border:#e7e2da}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#1e1e1e;margin:0;padding:0;background:var(--bg)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border)}
+.site-title{margin:0 auto;text-align:center;font-size:28px;background:var(--head2);padding:6px 12px;border-radius:10px;display:inline-block}
+.top-left{display:flex;gap:8px}
+.container{max-width:1200px;margin:16px auto;padding:0 12px;display:grid;grid-template-columns:1fr;gap:16px}
+.card{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.04);border:1px solid var(--border)}
+.card-head{display:flex;justify-content:space-between;align-items:center}
+.card-head + *{margin-top:12px}
+.small-controls{display:flex;gap:8px;align-items:center}
+.small-controls #saw-thickness{width:80px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;color:#2b2b2b;font-size:14px;line-height:1.2}
+.btn:hover{background:#faf8f4}
+.btn.icon-btn{padding:6px 10px;line-height:1}
+.btn.primary{background:var(--primary);color:white;border:none}
+.btn.pink{background:var(--accent);color:white;border:none}
+.inline{display:flex;gap:6px;align-items:center}
+.chip{display:inline-block;padding:0 6px;border-radius:10px;background:#eee;font-size:12px}
+.hidden{display:none}
+#requirements-list .req-row{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed #eee}
+.req-row select,.req-row input{padding:6px;border:1px solid #ddd;border-radius:6px}
+.db-table{width:100%;border-collapse:collapse}
+.db-table th,.db-table td{padding:8px;border:1px solid var(--border);text-align:center;font:inherit}
+.db-table thead tr:first-child th{background:var(--head1)}
+.db-table thead tr:nth-child(2) th{background:var(--head2)}
+.db-area{overflow:auto;max-height:60vh;padding-top:6px}
+.db-table thead tr:first-child th{position:sticky;top:0;z-index:2}
+.db-table thead tr:nth-child(2) th{position:sticky;top:34px;z-index:1}
+.actions{margin-top:12px;display:flex;gap:8px}
+.actions-center{justify-content:center}
+.footer{padding:12px;text-align:center;color:var(--muted)}
+.file-btn input{display:none}
+.file-btn{display:inline-flex;align-items:center;gap:8px}
+.file-btn span{font:inherit}
+.req-row .small{font-size:12px;color:var(--muted)}
+.results-section{margin-top:12px}
+.diagram{border:1px solid var(--border);border-radius:6px;padding:8px;background:#fff}
+.diagram text{pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.legend .item{display:flex;gap:6px;align-items:center}
+.pastel{border-radius:4px;width:20px;height:14px}
+/* הצגה אנכית של הבלוקים גם במסכים רחבים */
+@media(min-width:900px){.container{grid-template-columns:1fr}}
+@media(max-width:600px){.topbar h1{font-size:16px}.btn{padding:6px 8px}.container{grid-template-columns:1fr}}
