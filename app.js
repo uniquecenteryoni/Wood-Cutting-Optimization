@@ -1529,14 +1529,14 @@ function addRequirementRow() {
 
 // אירועים (מותאמים ל-HTML הנוכחי, עם בדיקות קיום אלמנטים)
 const btnLang = document.getElementById('btn-lang');
-if (btnLang) btnLang.addEventListener('click', () => {
+if (btnLang && !window.__siteGlobal) btnLang.addEventListener('click', () => {
     const next = language === 'he' ? 'en' : 'he';
     switchLanguage(next);
     btnLang.textContent = next === 'he' ? 'english' : 'עברית';
 });
 
 const btnCurrency = document.getElementById('btn-currency');
-if (btnCurrency) {
+if (btnCurrency && !window.__siteGlobal) {
     const cycle = ['€', '₪', '$'];
     // אתחול תצוגה משמירה קודמת
     const savedSymbol = loadData('currencySymbol') || (inventoryPriceCurrencyUnit || '€');
@@ -1552,7 +1552,7 @@ if (btnCurrency) {
 }
 
 const btnUnits = document.getElementById('btn-units');
-if (btnUnits) {
+if (btnUnits && !window.__siteGlobal) {
     // אתחל תווית לפי מצב שמור
     btnUnits.textContent = unitSystem === 'metric' ? 'm' : 'inch';
     btnUnits.addEventListener('click', () => {

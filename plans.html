@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>תוכניות בנייה להורדה</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-actions">
+      <button id="btn-lang" class="btn">english</button>
+      <button id="btn-currency" class="btn">€</button>
+      <button id="btn-units" class="btn">m</button>
+    </div>
+  <h1 class="site-title">תוכניות בנייה להורדה</h1>
+  </header>
+  <nav class="main-nav" aria-label="primary">
+    <div class="nav-wrap">
+  <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+  <a href="plans.html" class="nav-link active">תוכניות בנייה להורדה</a>
+  <a href="about.html" class="nav-link">אודות</a>
+  <a href="contact.html" class="nav-link">צור קשר</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <section class="card">
+      <div class="plans-toolbar">
+        <input id="plans-search" class="search-input" placeholder="חיפוש תוכנית..." />
+        <div class="inline" style="gap:6px">
+          <span class="chip">סה"כ <span id="plans-count">0</span></span>
+        </div>
+      </div>
+      <div id="plans-grid" class="plans-grid" style="margin-top:12px"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© 2025 — תוכניות בנייה</small>
+  </footer>
+
+  <script src="site.js"></script>
+  <script src="plans.js"></script>
+</body>
+</html>
