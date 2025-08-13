@@ -291,11 +291,29 @@ function convertedUnitLabel(fromUnit, toSystem) {
     return f || '';
 }
 
+// יחידות בשפה המתאימה
+function localizedUnitShort(u, lang) {
+    const f = normalizeUnitLabel(u);
+    switch (f) {
+        case 'mm': return lang==='he' ? 'מ״מ' : 'mm';
+        case 'cm': return lang==='he' ? 'ס״מ' : 'cm';
+        case 'm':  return lang==='he' ? 'מ׳'  : 'm';
+        case 'in': return lang==='he' ? 'אינץ׳' : 'inch';
+        default: return f || '';
+    }
+}
+function convertedUnitLabelLocalized(fromUnit, toSystem, lang) {
+    if (toSystem === 'imperial') return localizedUnitShort('in', lang);
+    return localizedUnitShort(fromUnit, lang);
+}
+
 // תרגום שמות עמודות בסיסיות
 function translateHeaderName(name) {
     const s = String(name || '').trim().toLowerCase();
     const enToHe = {
         'type': 'סוג',
+    'tree type': 'סוג',
+    'supplier': 'ספק',
         'classification': 'סיווג',
         'thickness': 'עובי',
         'width': 'רוחב',
@@ -305,6 +323,8 @@ function translateHeaderName(name) {
     };
     const heToEn = {
         'סוג': 'Type',
+    'סוג עץ': 'Type',
+    'ספק': 'Supplier',
         'סיווג': 'Classification',
         'עובי': 'Thickness',
         'רוחב': 'Width',
@@ -321,6 +341,16 @@ function translateHeaderName(name) {
         if (enToHe[s]) return name; // אינדיקציה שזה באנגלית
         return heToEn[s] || name;
     }
+}
+
+// Classification helpers (support HE/EN)
+function classificationIsPlate(val) {
+    const s = String(val || '').trim().toLowerCase();
+    return s.includes('פלטה') || s.includes('plate');
+}
+function classificationIsBeam(val) {
+    const s = String(val || '').trim().toLowerCase();
+    return s.includes('קורה') || s.includes('beam');
 }
 
 // המרת אורך למטר (לפי יחידה מהשורה השנייה של הקובץ)
@@ -421,14 +451,21 @@ function renderInventoryTable() {
             // דאג שבראש היחידות יוצג המטבע גם בעמודות מחיר
             return document.getElementById('btn-currency')?.textContent?.trim() || normalizeCurrencySymbol(u) || '';
         }
-        return convertedUnitLabel(u, unitSystem);
+        return convertedUnitLabelLocalized(u, unitSystem, language);
     }) : [];
     const thead1 = `<tr>${headers.map(h => `<th>${h ?? ''}</th>`).join('')}</tr>`;
     const thead2 = units && units.length ? `<tr>${inventoryHeaders.map((_, i) => `<th>${displayUnits[i] ?? ''}</th>`).join('')}<th></th></tr>` : '';
     // שורת עריכה ריקה בראש הטבלה, אם נדרשה (כולל תא פעולות)
     const cols = headers.length;
+    const clsIdx = getClassificationColIndex();
     const newRow = showNewInventoryRow
-        ? `<tr class="new-row">${Array.from({ length: cols - 1 }).map((_, i) => `<td contenteditable="true" data-col="${i}"></td>`).join('')}<td>
+        ? `<tr class="new-row">${Array.from({ length: cols - 1 }).map((_, i) => {
+            if (i === clsIdx) {
+                const opts = language === 'he' ? ['קורה','פלטה'] : ['Beam','Plate'];
+                return `<td data-col="${i}"><select class="inv-classification">${opts.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></td>`;
+            }
+            return `<td contenteditable="true" data-col="${i}"></td>`;
+        }).join('')}<td>
             <button class="btn btn-save-new">${language === 'he' ? 'שמור' : 'Save'}</button>
             <button class="btn btn-cancel-new">${language === 'he' ? 'בטל' : 'Cancel'}</button>
           </td></tr>`
@@ -440,12 +477,12 @@ function renderInventoryTable() {
     const priceIdx = getPriceColIndex();
     const ppmIdx = getPricePerMeterColIndex();
     const tbody = newRow + body.map((r, rowIndex) => {
-        const tds = inventoryHeaders.map((_, i) => {
+    const tds = inventoryHeaders.map((_, i) => {
             const raw = r[i];
             const unit = (units || [])[i] || '';
             let display = raw;
             const num = parseFloat(String(raw).replace(/[^0-9.\-]/g,''));
-        if (isFinite(num)) {
+    if (isFinite(num)) {
                 const conv = convertNumberByUnit(num, unit, unitSystem);
                 // הצגה שונה לעמודות רוחב/עובי: המרה לפי יחידות המקור והצגה ללא נקודות אם מספר שלם
                 if (i === thIdx || i === wIdx) {
@@ -460,6 +497,13 @@ function renderInventoryTable() {
                 } else {
                     display = formatNumber(conv);
                 }
+            }
+            if (editingRows.has(rowIndex) && i === clsIdx) {
+                const isPlate = classificationIsPlate(raw);
+                const beamLabel = language==='he' ? 'קורה' : 'Beam';
+                const plateLabel = language==='he' ? 'פלטה' : 'Plate';
+                const select = `<select class="inv-classification"><option value="${beamLabel}" ${isPlate?'':'selected'}>${beamLabel}</option><option value="${plateLabel}" ${isPlate?'selected':''}>${plateLabel}</option></select>`;
+                return `<td data-col="${i}">${select}</td>`;
             }
             return `<td ${editingRows.has(rowIndex) ? 'contenteditable="true"' : ''} data-col="${i}">${display ?? ''}</td>`;
         }).join('');
@@ -848,8 +892,8 @@ function computeOptimization() {
         const type = r.type;
         const thickness = r.thickness;
         const widthVal = r.width; // אם select או input
-        const classification = getClassificationFor(type, thickness);
-        if (classification && classification.includes('פלטה')) {
+    const classification = getClassificationFor(type, thickness);
+    if (classification && classificationIsPlate(classification)) {
             // רוחב דרישה לפלטות נקלט מהממשק: ס"מ במטרי, אינץ' באימפריאלי
             const wReqMM = toMM(widthVal, unitSystem === 'imperial' ? 'in' : 'cm');
             const lReqMM = toMM(r.length, unitSystem === 'imperial' ? 'in' : 'cm');
@@ -1104,8 +1148,8 @@ function renderResults(results) {
             ]);
         }
         const headers = language==='he'
-            ? ['סוג','סיווג',`עובי (${convertedUnitLabel(thU, unitSystem)})`, `רוחב (${convertedUnitLabel(wU, unitSystem)})`, `אורך עץ (${lenUnitLbl})`, `מחיר (${priceSym})`,`ספק`, cutsHeader, wasteHeader, 'פחת (%)']
-            : ['Type','Class',`Thickness (${convertedUnitLabel(thU, unitSystem)})`, `Width (${convertedUnitLabel(wU, unitSystem)})`, `Length (${lenUnitLbl})`, `Price (${priceSym})`,`Supplier`, cutsHeader, wasteHeader, 'Waste (%)'];
+            ? ['סוג','סיווג',`עובי (${convertedUnitLabelLocalized(thU, unitSystem, language)})`, `רוחב (${convertedUnitLabelLocalized(wU, unitSystem, language)})`, `אורך עץ (${lenUnitLbl})`, `מחיר (${priceSym})`,`ספק`, cutsHeader, wasteHeader, 'פחת (%)']
+            : ['Type','Class',`Thickness (${convertedUnitLabelLocalized(thU, unitSystem, language)})`, `Width (${convertedUnitLabelLocalized(wU, unitSystem, language)})`, `Length (${lenUnitLbl})`, `Price (${priceSym})`,`Supplier`, cutsHeader, wasteHeader, 'Waste (%)'];
         return buildHtmlTable(headers, rows);
     }
 
@@ -1113,7 +1157,7 @@ function renderResults(results) {
         const total = convertBaseToDisplayCurrency(results.totals.totalCost);
         const maxProds = Math.max(1, results.totals.maxProducts|0);
         const pricePer = total / maxProds;
-        const headers = language==='he' ? ['מחיר כולל', 'מס׳ מוצרים אפשריים', 'מחיר עבור מוצר'] : ['Total Price', 'Max Products', 'Price per Product'];
+    const headers = language==='he' ? ['מחיר כולל', 'מס׳ מוצרים אפשריים', 'מחיר עבור מוצר'] : ['Total Price', 'Max Products', 'Price per Product'];
     const rows = [[ `${formatSmart(total)} ${priceSym}`, `${maxProds}`, `${formatSmart(pricePer)} ${priceSym}` ]];
         return buildHtmlTable(headers, rows);
     }
@@ -1149,7 +1193,7 @@ function renderResults(results) {
                 `${r.qty}`
             ];
         });
-        const headers = language==='he' ? ['סוג','סיווג',`עובי (${convertedUnitLabel(thU, unitSystem)})`, `רוחב (${convertedUnitLabel(wU, unitSystem)})`, `אורך (${displayLenUnitLabel()})`, 'כמות'] : ['Type','Class',`Thickness (${convertedUnitLabel(thU, unitSystem)})`, `Width (${convertedUnitLabel(wU, unitSystem)})`, `Length (${displayLenUnitLabel()})`, 'Qty'];
+    const headers = language==='he' ? ['סוג','סיווג',`עובי (${convertedUnitLabelLocalized(thU, unitSystem, language)})`, `רוחב (${convertedUnitLabelLocalized(wU, unitSystem, language)})`, `אורך (${displayLenUnitLabel()})`, 'כמות'] : ['Type','Class',`Thickness (${convertedUnitLabelLocalized(thU, unitSystem, language)})`, `Width (${convertedUnitLabelLocalized(wU, unitSystem, language)})`, `Length (${displayLenUnitLabel()})`, 'Qty'];
         return buildHtmlTable(headers, rows);
     }
 
@@ -1217,8 +1261,8 @@ function renderResults(results) {
             } else {
                 const lenM = r.lengthDisp; // במטרים
                 title = (language==='he')
-                    ? `פריט ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} מ״מ , ${formatSmart(lenM)} מ׳`
-                    : `Item ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} mm , ${formatSmart(lenM)} m`;
+                    ? `פריט ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} מ״מ*מ״מ , ${formatSmart(lenM)} מ׳`
+                    : `Item ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} mm*mm , ${formatSmart(lenM)} m`;
             }
             parts.push(`<div class="results-section"><h3>${title}</h3>${beamSvg(r)}</div>`);
             idx++;
@@ -1239,8 +1283,8 @@ function renderResults(results) {
             } else {
                 const wM = wMM/1000, lM = lMM/1000;
                 title = language==='he'
-                    ? `פריט ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} מ׳ , עובי ${formatSmart(thMM)} מ״מ`
-                    : `Item ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} m , thickness ${formatSmart(thMM)} mm`;
+                    ? `פריט ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} מ׳*מ׳ , עובי ${formatSmart(thMM)} מ״מ`
+                    : `Item ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} m*m , thickness ${formatSmart(thMM)} mm`;
             }
             parts.push(`<div class="results-section"><h3>${title}</h3>${plateSvg(p)}</div>`);
             idx++;
@@ -1434,34 +1478,47 @@ function renderResults(results) {
                 }
             }
         });
-    // תווית פחת במלבן הגדול ביותר (אם יש) — מציג אחוזים בלבד בפלטות, תואם לטבלה 1
-    if (Array.isArray(p.freeRects) && p.freeRects.length) {
-            let best = null;
-            for (const fr of p.freeRects) {
-                const area = Math.max(0, fr.w) * Math.max(0, fr.h);
-                if (!best || area > best.area) best = { ...fr, area };
-            }
-            if (best && best.w > 0 && best.h > 0) {
-                let x = best.x, y = best.y, wmm = best.w, hmm = best.h;
-                if (rotated) { x = best.y; y = best.x; wmm = best.h; hmm = best.w; }
+        // ציור והצגת מידות לכל מלבן פחת (freeRects)
+        if (Array.isArray(p.freeRects) && p.freeRects.length) {
+            for (let i=0;i<p.freeRects.length;i++) {
+                const fr = p.freeRects[i];
+                if (!fr || fr.w <= 0 || fr.h <= 0) continue;
+                let x = fr.x, y = fr.y, wmm = fr.w, hmm = fr.h;
+                if (rotated) { x = fr.y; y = fr.x; wmm = fr.h; hmm = fr.w; }
                 const px = x * scale, py = y * scale, pw = wmm * scale, ph = hmm * scale;
-                const clipIdW = `plate_waste_lbl`;
-                rects.push(`<defs><clipPath id="${clipIdW}"><rect x="${px}" y="${py}" width="${pw}" height="${ph}" /></clipPath></defs>`);
-        const areaPct = Number(p.wastePct) || 0; // השתמש בערך מטבלה 1
-                const cx = px + pw/2, cy = py + ph/2;
-                const txt = `${formatSmart(areaPct)}%`;
-                const font = (pw>=140 && ph>=40) ? 12 : (pw>=90 && ph>=28 ? 11 : 10);
-        // אם הפחת קטן מאוד (<10%) או שאין מספיק מקום, אל תציג
-        if (displaySettings.showPieceLabels && areaPct >= 10 && pw >= 60 && ph >= 24) {
-            const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-            rects.push(`<text ${weightAttr} clip-path="url(#${clipIdW})" x="${cx}" y="${cy}" font-size="${font}" text-anchor="middle" dominant-baseline="middle" fill="#666">${txt}</text>`);
-        }
+                // מסגרת עדינה סביב אזור הפחת
+                rects.push(`<rect x="${px}" y="${py}" width="${Math.max(0.5,pw)}" height="${Math.max(0.5,ph)}" fill="none" stroke="#bdbdbd" stroke-width="1" />`);
+                // תוויות מידות לפי יחידות תצוגה (ס"מ או אינץ')
+                if (displaySettings.showPieceLabels) {
+                    const inchSym = '″';
+                    const wDisp = unitSystem==='imperial' ? (wmm/25.4) : (wmm/10);
+                    const hDisp = unitSystem==='imperial' ? (hmm/25.4) : (hmm/10);
+                    const unitLbl = unitSystem==='imperial' ? inchSym : (language==='he'?'ס״מ':'cm');
+                    const labelInline = unitSystem==='imperial'
+                        ? `${formatSmart(wDisp)}${inchSym}×${formatSmart(hDisp)}${inchSym}`
+                        : `${formatSmart(wDisp)}×${formatSmart(hDisp)} ${unitLbl}`;
+                    const cx = px + pw/2, cy = py + ph/2;
+                    const fitsWide = pw >= 100 && ph >= 24; // סף סביר לקריאות
+                    const fitsMedium = pw >= 70 && ph >= 24;
+                    const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
+                    const color = '#555';
+                    if (fitsWide) {
+                        rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="${color}">${labelInline}</text>`);
+                    } else if (fitsMedium) {
+                        if (unitSystem==='imperial') {
+                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}${inchSym}×${formatSmart(hDisp)}${inchSym}</text>`);
+                        } else {
+                            // בשתי שורות: מספרים ואז יחידה
+                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy-6}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
+                        }
+                    }
+                }
             }
         }
     // תווית מידות הפלטה מחוץ לפלטה, במרכז למטה
     const plateSizeLbl = unitSystem==='imperial'
         ? `${formatSmart(PW/25.4)}″×${formatSmart(PH/25.4)}″`
-        : `${formatSmart(PW/1000)}×${formatSmart(PH/1000)} ${language==='he' ? 'מ׳' : 'm'}`;
+        : `${formatSmart(PW/1000)}×${formatSmart(PH/1000)} ${language==='he' ? 'מ׳*מ׳' : 'm*m'}`;
     const weightSize = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
     const sizeText = `<text ${weightSize} x="${platePxW/2}" y="${platePxH + extraBottom - 8}" font-size="12" text-anchor="middle" fill="#444">${plateSizeLbl}</text>`;
     return `<svg class="diagram" viewBox="0 0 ${viewW} ${platePxH + extraBottom}" preserveAspectRatio="none">${defs}${rects.join('')}${sizeText}</svg>`;
@@ -1470,11 +1527,14 @@ function renderResults(results) {
         const errHtml = Array.isArray(results.errors) && results.errors.length
                 ? `<div class="results-section" style="border-left:4px solid #d32f2f; background:#fdecea; color:#b71c1c; padding:8px 12px; border-radius:6px;">${results.errors.map(e=>`<div>• ${e}</div>`).join('')}</div>`
                 : '';
+    const title1 = language==='he' ? 'חיתוכים' : 'Cuts';
+    const title2 = language==='he' ? 'עלויות' : 'Costs';
+    const title3 = language==='he' ? 'עצים לרכישה' : 'Items to Purchase';
         area.innerHTML = `
             ${errHtml}
-            <div class="results-section">${table1()}</div>
-            <div class="results-section">${table2()}</div>
-            <div class="results-section">${table3()}</div>
+            <div class="results-section"><h3>${title1}</h3>${table1()}</div>
+            <div class="results-section"><h3>${title2}</h3>${table2()}</div>
+            <div class="results-section"><h3>${title3}</h3>${table3()}</div>
             <div class="results-section">${diagrams()}</div>
         `;
 
@@ -1508,12 +1568,12 @@ function addRequirementRow() {
         const types = getUniqueTypes();
         const typeOptions = [`<option value="">${language === 'he' ? 'סוג' : 'Type'}</option>`]
                 .concat(types.map(t => `<option value="${t}">${t}</option>`)).join('');
-        const thIdx = getThicknessColIndex();
-        const thUnit = thIdx >= 0 ? (inventoryUnits[thIdx] || '') : '';
+    const thIdx = getThicknessColIndex();
+    const thUnit = thIdx >= 0 ? (inventoryUnits[thIdx] || '') : '';
             row.innerHTML = `
             <select data-field="type">${typeOptions}</select>
             <select data-field="thickness" disabled>
-                <option value="">${language === 'he' ? `עובי${thUnit ? ' (' + thUnit + ')' : ''}` : `Thickness${thUnit ? ' (' + thUnit + ')' : ''}`}</option>
+        <option value="">${language === 'he' ? `עובי (מ״מ)` : `Thickness (mm)`}</option>
             </select>
             <select data-field="width" disabled>
                 <option value="">${language === 'he' ? 'רוחב' : 'Width'}</option>
@@ -1563,14 +1623,16 @@ if (btnUnits && !window.__siteGlobal) {
         // Convert saw thickness value
         const sawInput = document.getElementById('saw-thickness');
         const sawUnit = document.getElementById('saw-unit');
-        if (sawInput && sawUnit) {
+    if (sawInput && sawUnit) {
             const current = Number(sawInput.value || 0);
             if (isFinite(current)) {
                 const converted = unitSystem === 'imperial' ? (current / 25.4) : (current * 25.4);
-                sawInput.value = (unitSystem === 'imperial' ? converted.toFixed(3) : Math.round(converted));
-                sawUnit.textContent = unitSystem === 'imperial' ? 'in' : 'mm';
+        sawInput.value = (unitSystem === 'imperial' ? converted.toFixed(3) : Math.round(converted));
+        const he = language === 'he';
+        sawUnit.textContent = unitSystem === 'imperial' ? (he ? 'אינץ׳' : 'inch') : (he ? 'מ״מ' : 'mm');
             } else {
-                sawUnit.textContent = unitSystem === 'imperial' ? 'in' : 'mm';
+        const he = language === 'he';
+        sawUnit.textContent = unitSystem === 'imperial' ? (he ? 'אינץ׳' : 'inch') : (he ? 'מ״מ' : 'mm');
             }
         }
         // Re-render inventory and refresh requirement fields/labels
@@ -1627,8 +1689,75 @@ function renderResultsPlaceholder(summary) {
 
 const calcBtn = document.getElementById('calc-opt');
 if (calcBtn) calcBtn.addEventListener('click', () => {
+    // Show loader overlay and run Lottie (or spinner) for at least 2 seconds
+    const overlay = document.getElementById('loader-overlay');
+    const lottieEl = document.getElementById('lottie-container');
+    const spinner = document.getElementById('spinner-fallback');
+    const loaderText = document.getElementById('loader-text');
+    let anim = null;
+    const showLoader = () => {
+        overlay.classList.remove('hidden');
+        overlay.setAttribute('aria-hidden','false');
+    // Default: show spinner until Lottie signals DOMLoaded
+    if (spinner) spinner.style.display = '';
+    if (lottieEl) lottieEl.style.display = 'none';
+    if (loaderText) loaderText.textContent = language === 'he' ? 'מחשב אופטימיזציה…' : 'Computing optimization…';
+        // If lottie is available, try to load; otherwise keep spinner
+        if (typeof lottie !== 'undefined' && lottieEl) {
+            try {
+                // Prefer inline animation data if provided (avoid XHR on file://)
+                let inlineAnim = null;
+                try {
+                    const scriptEl = document.getElementById('loader-json');
+                    if (scriptEl && scriptEl.textContent) {
+                        inlineAnim = JSON.parse(scriptEl.textContent);
+                    }
+                } catch(e) { try { console.warn('Lottie: invalid JSON in #loader-json'); } catch(_){} }
+                const hasInline = (typeof window !== 'undefined' && !!window.LOADER_ANIM) || !!inlineAnim;
+                if (location && location.protocol === 'file:' && !hasInline) {
+                    try { console.warn('Lottie: running from file:// may block loading.json via XHR. Use a local server or provide window.LOADER_ANIM inline.'); } catch(e){}
+                }
+                anim = lottie.loadAnimation({
+                    container: lottieEl,
+                    renderer: 'svg',
+                    loop: true,
+                    autoplay: true,
+                    ...(hasInline ? { animationData: (window.LOADER_ANIM || inlineAnim) } : { path: 'loading.json' })
+                });
+                // Hide spinner only after the animation DOM is ready
+                anim.addEventListener('DOMLoaded', () => {
+                    if (spinner) spinner.style.display = 'none';
+                    if (lottieEl) lottieEl.style.display = '';
+                });
+                anim.addEventListener('data_failed', () => {
+                    if (spinner) spinner.style.display = '';
+                    try { console.warn('Lottie failed to load loading.json'); } catch(e){}
+                });
+            } catch(e){ if (spinner) spinner.style.display = ''; }
+        } else {
+            if (spinner) spinner.style.display = '';
+        }
+    };
+    const hideLoader = () => {
+        if (!overlay) return;
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden','true');
+        if (anim) { try { anim.destroy(); } catch(e){} anim = null; }
+        // Clear container to avoid overlaying multiple svgs on next run
+    if (lottieEl) { lottieEl.innerHTML = ''; lottieEl.style.display = ''; }
+    if (spinner) spinner.style.display = 'none';
+    if (loaderText) loaderText.textContent = '';
+    };
+    const start = Date.now();
+    showLoader();
+    // Do the computation (sync), but enforce a min 2s animation
     const res = computeOptimization();
-    renderResults(res);
+    const elapsed = Date.now() - start;
+    const remaining = Math.max(0, 2000 - elapsed);
+    setTimeout(() => {
+        renderResults(res);
+        hideLoader();
+    }, remaining);
 });
 
 const toggleDbBtn = document.getElementById('toggle-db');
@@ -1690,15 +1819,15 @@ if (reqList) reqList.addEventListener('change', (e) => {
         // עדכן עוביים
         const ths = type ? getUniqueThicknessesForType(type) : [];
         const thUnit = getThicknessColIndex() >= 0 ? (inventoryUnits[getThicknessColIndex()] || '') : '';
-        thSel.innerHTML = `<option value="">${language === 'he' ? 'עובי' : 'Thickness'}</option>` + ths.map(v => {
+    thSel.innerHTML = `<option value="">${language === 'he' ? 'עובי (מ״מ)' : 'Thickness (mm)'}</option>` + ths.map(v => {
             const labelVal = unitSystem === 'imperial' ? convertNumberByUnit(v, thUnit, 'imperial') : Number(v);
             const label = Math.abs(labelVal - Math.round(labelVal)) < 1e-9 ? String(Math.round(labelVal)) : formatNumber(labelVal);
             return `<option value="${v}">${label}</option>`;
         }).join('');
         thSel.disabled = ths.length === 0;
         // קבע סוג קלט לרוחב לפי סיווג
-        const cls = getClassificationFor(type, undefined);
-        const isPlate = cls && cls.includes('פלטה');
+    const cls = getClassificationFor(type, undefined);
+    const isPlate = cls && classificationIsPlate(cls);
         if (isPlate) {
             // החלף לשדה קלט ידני
             const newInput = document.createElement('input');
@@ -1733,8 +1862,8 @@ if (reqList) reqList.addEventListener('change', (e) => {
     if (target === thSel) {
         const thickness = thSel.value;
         const widths = (type && thickness) ? getUniqueWidths(type, thickness) : [];
-        const cls = getClassificationFor(type, thickness);
-        const isPlate = cls && cls.includes('פלטה');
+    const cls = getClassificationFor(type, thickness);
+    const isPlate = cls && classificationIsPlate(cls);
         if (isPlate) {
             // כבר שדה ידני - עדכן placeholder לפי יחידות
             if (wSel && wSel.tagName.toLowerCase() === 'input') {
@@ -1756,9 +1885,10 @@ if (reqList) reqList.addEventListener('change', (e) => {
             }
             const wUnit = getWidthColIndex() >= 0 ? (inventoryUnits[getWidthColIndex()] || '') : '';
             const widthLabel = language === 'he' ? 'רוחב' : 'Width';
+            const heMM = 'מ״מ';
             const widthPlaceholder = language==='he'
-                ? (unitSystem==='imperial' ? 'רוחב (אינץ׳)' : `${widthLabel} (${wUnit||'מ״מ'})`)
-                : (unitSystem==='imperial' ? 'Width (inch)' : `${widthLabel} (${wUnit||'mm'})`);
+                ? (unitSystem==='imperial' ? 'רוחב (אינץ׳)' : `${widthLabel} (${heMM})`)
+                : (unitSystem==='imperial' ? 'Width (inch)' : `${widthLabel} (mm)`);
             wSel.innerHTML = `<option value="">${widthPlaceholder}</option>` + widths.map(v => {
                 const labelVal = unitSystem === 'imperial' ? convertNumberByUnit(v, wUnit, 'imperial') : Number(v);
                 const label = Math.abs(labelVal - Math.round(labelVal)) < 1e-9 ? String(Math.round(labelVal)) : formatNumber(labelVal);
@@ -1803,7 +1933,10 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
             const tr = btn.closest('tr');
             const newVals = inventoryHeaders.map((_, i) => {
                 const td = tr.querySelector(`td[data-col="${i}"]`);
-                return td ? td.textContent.trim() : inventoryData[idx][i];
+                if (!td) return inventoryData[idx][i];
+                const sel = td.querySelector('select');
+                if (sel) return sel.value;
+                return td.textContent.trim();
             });
             // חשב מחיר למטר אם חסר/ניתן לחשב
             const priceIdx = getPriceColIndex();
@@ -1827,7 +1960,10 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
         const colsCount = inventoryHeaders.length;
         const newVals = Array.from({ length: colsCount }).map((_, i) => {
             const td = tr.querySelector(`td[data-col="${i}"]`);
-            return td ? td.textContent.trim() : '';
+            if (!td) return '';
+            const sel = td.querySelector('select');
+            if (sel) return sel.value;
+            return td.textContent.trim();
         });
         if (newVals.some(v => String(v).trim() !== '')) {
             // חשב מחיר למטר אוטומטית
@@ -1890,7 +2026,10 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
     const btnUnits = document.getElementById('btn-units');
     if (btnUnits) btnUnits.textContent = unitSystem === 'metric' ? 'm' : 'inch';
     const sawUnit = document.getElementById('saw-unit');
-    if (sawUnit) sawUnit.textContent = unitSystem === 'metric' ? 'mm' : 'in';
+    if (sawUnit) {
+        const he = language === 'he';
+        sawUnit.textContent = unitSystem === 'metric' ? (he ? 'מ״מ' : 'mm') : (he ? 'אינץ׳' : 'inch');
+    }
     // מטבע
     const btnCurrency = document.getElementById('btn-currency');
     if (btnCurrency) btnCurrency.textContent = loadData('currencySymbol') || (inventoryPriceCurrencyUnit || '€');

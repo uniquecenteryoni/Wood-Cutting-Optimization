@@ -1,7 +1,11 @@
 // Toggle language and direction for About page to match saved preference
 (function(){
   try {
-    const lang = (localStorage.getItem('lang') || 'he').toLowerCase();
+    // Robust read of stored language (supports JSON-wrapped strings like "he")
+    let raw = localStorage.getItem('lang');
+    if (raw == null) raw = 'he';
+    try { raw = JSON.parse(raw); } catch(e) {}
+    const lang = String(raw).trim().replace(/^"|"$/g,'').toLowerCase();
     const html = document.documentElement;
     const t = {
       he: {
