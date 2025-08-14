@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#6a8f6b" />
   <title>אופטימיזציית חיתוך עץ</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- external libs -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -98,7 +101,7 @@
   </footer>
 
   <!-- Full-screen loader overlay -->
-  <div id="loader-overlay" class="loader-overlay hidden" aria-hidden="true">
+  <div id="loader-overlay" class="loader-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true">
     <div id="lottie-container" class="lottie-box" aria-label="Loading animation"></div>
     <div id="spinner-fallback" class="spinner" aria-hidden="true"></div>
   <div id="loader-text" class="loader-text" aria-live="polite" aria-atomic="true"></div>

@@ -23,6 +23,8 @@ displaySettings = {
     showPieceLabels: displaySettings.showPieceLabels !== false,
     panelOpen: !!displaySettings.panelOpen
 };
+// מזהה ייחודי לדיאגרמות SVG כדי למנוע התנגשויות id בין דיאגרמות שונות
+let svgIdCounter = 0;
 // מילון תרגומים
 const translations = {
     he: {
@@ -1295,6 +1297,8 @@ function renderResults(results) {
     function beamSvg(r) {
         // סרגל 100% רוחב, גובה 48
     const total = r.lengthDisp; // בתצוגה: m במטרי / inch באימפריאלי
+        // מזהה ייחודי לדיאגרמה זו
+        const svgId = `svg_${svgIdCounter++}`;
     const w = 1000, h = 80; // גובה מוגדל כדי לשים תווית אורך מתחת לקורה
         const scale = total>0 ? (w / total) : 1;
         let x = 0;
@@ -1320,12 +1324,12 @@ function renderResults(results) {
             const rects = [];
             let clipDefs = [];
                 const defsBase = `
-                    <pattern id="wasteHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                    <pattern id="${svgId}_wasteHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
                         <line x1="0" y1="0" x2="0" y2="8" stroke="#c8c8c8" stroke-width="2" />
                     </pattern>`;
             // רקע ברירת מחדל לכל אזור הקורה — כמו פחת (כדי שהשוליים יראו כרקע פחת)
             rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="#f3f3f3" />`);
-            rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="url(#wasteHatch)" />`);
+            rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="url(#${svgId}_wasteHatch)" />`);
     const unitShort = unitSystem==='imperial' ? '″' : (language==='he' ? 'ס״מ' : 'cm');
         for (let i=0;i<pieces.length;i++) {
             const pw = Math.max(0.5, (pieces[i]*scale)); // ללא עיגול כדי למנוע הצטברות שגיאה
@@ -1337,7 +1341,7 @@ function renderResults(results) {
             const numStr = `${formatSmart(labelVal)}`;
             const unitStr = `${unitShort}`;
             const centerX = x + pw/2;
-            const clipId = `clip_${i}`;
+            const clipId = `${svgId}_clip_${i}`;
             clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="10" width="${pw}" height="40" /></clipPath>`);
             if (displaySettings.showPieceLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
@@ -1373,7 +1377,7 @@ function renderResults(results) {
             const numStr = `${formatSmart(unitSystem==='imperial'?wasteLenDisp:(wasteLenDisp*100))}`;
             const unitStr = `${unitShort}`;
             const centerX = x + wasteW/2;
-            const clipIdW = `clip_waste`;
+            const clipIdW = `${svgId}_clip_waste`;
             clipDefs.push(`<clipPath id="${clipIdW}"><rect x="${x}" y="10" width="${wasteW}" height="40" /></clipPath>`);
             const weightW = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
             if (wasteW >= 80) {
@@ -1412,7 +1416,8 @@ function renderResults(results) {
 
     function plateSvg(p) {
         // ציור פרופורציונלי לפלטה ולחלקים שעליה
-        const viewW = 1000, viewH = 600;
+    const viewW = 1000, viewH = 600;
+    const svgId = `svg_${svgIdCounter++}`;
         let PW = p.plateWmm || toMM(p.width, inventoryUnits[getWidthColIndex()]||'');
         let PH = p.plateHmm || toMM(p.length, inventoryUnits[getLengthColIndex()]||'');
         // וודא שהצלע הארוכה לרוחב
@@ -1426,12 +1431,12 @@ function renderResults(results) {
         // רקע פחת
         const defs = `
             <defs>
-                <pattern id="wasteHatchPlate" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                <pattern id="${svgId}_wasteHatchPlate" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
                     <line x1="0" y1="0" x2="0" y2="8" stroke="#c8c8c8" stroke-width="2" />
                 </pattern>
             </defs>`;
         rects.push(`<rect x="0" y="0" width="${platePxW}" height="${platePxH}" fill="#f3f3f3" stroke="#cfd4da" />`);
-        rects.push(`<rect x="0" y="0" width="${platePxW}" height="${platePxH}" fill="url(#wasteHatchPlate)" />`);
+        rects.push(`<rect x="0" y="0" width="${platePxW}" height="${platePxH}" fill="url(#${svgId}_wasteHatchPlate)" />`);
     // צבעי פסטל וקבוצות זהות (לפי מידות מקוריות mm)
         const palette = ['#dfe8d8','#e9e2d0','#e8d9d4','#dbe7e5','#e8e3ef','#f2e6de'];
         const groups = {};
@@ -1446,7 +1451,7 @@ function renderResults(results) {
             }
             const px = x * scale, py = y * scale, pw = Math.max(0.5, wmm * scale), ph = Math.max(0.5, hmm * scale);
             const key = keyFor(pc.srcW, pc.srcH);
-            const clipId = `plate_clip_${i}`;
+            const clipId = `${svgId}_plate_clip_${i}`;
             rects.push(`<defs><clipPath id="${clipId}"><rect x="${px}" y="${py}" width="${pw}" height="${ph}" /></clipPath></defs>`);
             const fillColor = displaySettings.colorPieces ? (groupColor[key]||'#eaf4ea') : '#ffffff';
             rects.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${fillColor}" stroke="#cfd4da" />`);
@@ -1580,7 +1585,7 @@ function addRequirementRow() {
             </select>
                 <input data-field="length" type="number" min="0" placeholder="${language === 'he' ? (unitSystem==='imperial'?'אורך (אינץ׳)':'אורך (ס״מ)') : (unitSystem==='imperial'?'Length (inch)':'Length (cm)')}" />
             <input data-field="qty" type="number" min="1" placeholder="${language === 'he' ? 'כמות' : 'Qty'}" />
-            <button class="btn small" title="Remove">✖</button>
+            <button class="btn small btn-remove" title="Remove">✖</button>
         `;
         const removeBtn = row.querySelector('button');
         if (removeBtn) removeBtn.addEventListener('click', () => row.remove());
@@ -1694,10 +1699,12 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
     const lottieEl = document.getElementById('lottie-container');
     const spinner = document.getElementById('spinner-fallback');
     const loaderText = document.getElementById('loader-text');
+    const mainEl = document.querySelector('main');
     let anim = null;
     const showLoader = () => {
-        overlay.classList.remove('hidden');
+    overlay.classList.remove('hidden');
         overlay.setAttribute('aria-hidden','false');
+    if (mainEl) mainEl.setAttribute('aria-busy','true');
     // Default: show spinner until Lottie signals DOMLoaded
     if (spinner) spinner.style.display = '';
     if (lottieEl) lottieEl.style.display = 'none';
@@ -1717,10 +1724,11 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
                 if (location && location.protocol === 'file:' && !hasInline) {
                     try { console.warn('Lottie: running from file:// may block loading.json via XHR. Use a local server or provide window.LOADER_ANIM inline.'); } catch(e){}
                 }
+                const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
                 anim = lottie.loadAnimation({
                     container: lottieEl,
                     renderer: 'svg',
-                    loop: true,
+                    loop: prefersReduced ? false : true,
                     autoplay: true,
                     ...(hasInline ? { animationData: (window.LOADER_ANIM || inlineAnim) } : { path: 'loading.json' })
                 });
@@ -1740,8 +1748,9 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
     };
     const hideLoader = () => {
         if (!overlay) return;
-        overlay.classList.add('hidden');
+    overlay.classList.add('hidden');
         overlay.setAttribute('aria-hidden','true');
+    if (mainEl) mainEl.removeAttribute('aria-busy');
         if (anim) { try { anim.destroy(); } catch(e){} anim = null; }
         // Clear container to avoid overlaying multiple svgs on next run
     if (lottieEl) { lottieEl.innerHTML = ''; lottieEl.style.display = ''; }

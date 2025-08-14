@@ -19,10 +19,10 @@ const t = {
 
 // Data: sample plans with bilingual titles/desc
 const plans = [
-  { id: 1, title: {he:'ספסל עץ גינה', en:'Garden Wood Bench'}, desc: {he:'ספסל עץ קלאסי להרכבה עצמית', en:'Classic DIY wooden bench'}, price: 59, currency: '₪', img: '', tags: ['bench','garden','outdoor'] },
-  { id: 2, title: {he:'שולחן קפה מודרני', en:'Modern Coffee Table'}, desc: {he:'שולחן סלון מינימליסטי', en:'Minimal living-room table'}, price: 79, currency: '₪', img: '', tags: ['table','living','modern'] },
-  { id: 3, title: {he:'מדף קיר מרחף', en:'Floating Wall Shelf'}, desc: {he:'ערכת הרכבה למדף מרחף', en:'DIY kit for floating shelf'}, price: 39, currency: '₪', img: '', tags: ['shelf','storage','wall'] },
-  { id: 4, title: {he:'מזנון טלוויזיה', en:'TV Console'}, desc: {he:'מזנון עץ קלאסי עם אחסון', en:'Classic TV sideboard with storage'}, price: 99, currency: '₪', img: '', tags: ['tv','console','living'] },
+  { id: 1, title: {he:'מגדל למידה מונטסורי', en:'Montessori Learning Tower'}, desc: {he:'פתרון עיצובי ופונקציונלי שמאפשר לילדים לעמוד בגובה משטחי עבודה של מבוגרים בבטחה ובעצמאות, ומעודד אותם לקחת חלק פעיל במטלות יומיומיות.', en:'A functional design that lets children safely and independently reach adult countertop height and take an active part in daily tasks.'}, price: 20, currency: '₪', img: 'pics/learnningtower.jpg', img2: '', tags: ['kids','montessori','learning','tower'] },
+  { id: 2, title: {he:'אדנית עץ ריבועית', en:'Square Wooden Planter'}, desc: {he:'אדנית לגינה מעץ, מושלמת לגידול פרחים, צמחי תבלין וירקות, משדרגת כל פינת ישיבה.', en:'A wooden garden planter, perfect for growing flowers, herbs and vegetables; elevates any seating area.'}, price: 15, currency: '₪', img: 'pics/gardenbed.jpg', img2: '', tags: ['planter','garden','wood'] },
+  { id: 3, title: {he:'מיטת מעבר מונטסורית', en:'Montessori Toddler Bed'}, desc: {he:'מיטת מעבר מונטסורית לילד שלכם: תוכנית בנייה קלה, מפורטת ונגישה, הכוללת את כל השלבים, רשימת החומרים וכלי העבודה כדי שתוכלו לבנות במו ידיכם מיטה בטוחה שתעודד עצמאות, חופש תנועה וביטחון עצמי.', en:'A Montessori toddler transition bed: a clear, easy-to-follow building plan with all steps, materials and tools, so you can build a safe bed that fosters independence, freedom of movement and confidence.'}, price: 25, currency: '₪', img: 'pics/montesorribed.jpg', img2: '', tags: ['bed','kids','montessori'] },
+  { id: 4, title: {he:'קמפוס בורד לאימונים', en:'Campus Board for Training'}, desc: {he:'לוח אימונים מודולרי, שיאפשר לכם לשפר את טכניקת הטיפוס והכוח בכל רגע, בנוחות הבית', en:'A modular training board to improve climbing technique and strength anytime, from the comfort of your home.'}, price: 15, currency: '₪', img: 'pics/campusboard.jpg', img2: '', tags: ['climbing','training','fitness'] },
 ];
 
 // simple currency rates aligned with app.js
@@ -49,14 +49,35 @@ function formatPrice(basePrice, baseSymbol){
   return `${to}${Math.round(Number(val) * 100) / 100}`;
 }
 
+// Derive secondary image from primary by inserting _s before extension
+function deriveSecondImage(imgPath){
+  if (!imgPath || typeof imgPath !== 'string') return '';
+  const qPos = imgPath.indexOf('?');
+  const path = qPos >= 0 ? imgPath.slice(0, qPos) : imgPath;
+  const lastSlash = path.lastIndexOf('/');
+  const lastDot = path.lastIndexOf('.');
+  if (lastDot > lastSlash) {
+    return path.slice(0, lastDot) + '_s' + path.slice(lastDot);
+  }
+  return path + '_s';
+}
+
 function planCard(p) {
   const lang = currentLang();
-  const img = p.img
-    ? `<img class="thumb" src="${p.img}" alt="${p.title[lang]}" />`
+  const imgs = [];
+  const primary = p.img || '';
+  const secondary = p.img2 || deriveSecondImage(primary);
+  if (primary) imgs.push(primary);
+  if (secondary) imgs.push(secondary);
+  const imgHTML = imgs.length
+    ? `<div class="thumb" aria-label="${p.title[lang]}">`+
+        `<img class="thumb-img primary" src="${imgs[0]}" alt="${p.title[lang]}" loading="lazy" />`+
+        (imgs[1] ? `<img class="thumb-img secondary" src="${imgs[1]}" alt="${p.title[lang]} – תכנית בנייה" loading="lazy" onerror="this.remove()" />` : '')+
+      `</div>`
     : `<div class="thumb">${p.title[lang].substring(0, 2)}</div>`;
   return `
     <article class="plan-card">
-      ${img}
+      ${imgHTML}
       <div class="body">
         <h3>${p.title[lang]}</h3>
         <p>${p.desc[lang]}</p>
