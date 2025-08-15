@@ -17,8 +17,8 @@ const t = {
   }
 };
 
-// Data: sample plans with bilingual titles/desc
-const plans = [
+// Prefer shared data if present (from plans-data.js)
+const plans = (window.PLANS && Array.isArray(window.PLANS)) ? window.PLANS : [
   { id: 1, title: {he:'מגדל למידה מונטסורי', en:'Montessori Learning Tower'}, desc: {he:'פתרון עיצובי ופונקציונלי שמאפשר לילדים לעמוד בגובה משטחי עבודה של מבוגרים בבטחה ובעצמאות, ומעודד אותם לקחת חלק פעיל במטלות יומיומיות.', en:'A functional design that lets children safely and independently reach adult countertop height and take an active part in daily tasks.'}, price: 20, currency: '₪', img: 'pics/learnningtower.jpg', img2: '', tags: ['kids','montessori','learning','tower'] },
   { id: 2, title: {he:'אדנית עץ ריבועית', en:'Square Wooden Planter'}, desc: {he:'אדנית לגינה מעץ, מושלמת לגידול פרחים, צמחי תבלין וירקות, משדרגת כל פינת ישיבה.', en:'A wooden garden planter, perfect for growing flowers, herbs and vegetables; elevates any seating area.'}, price: 15, currency: '₪', img: 'pics/gardenbed.jpg', img2: '', tags: ['planter','garden','wood'] },
   { id: 3, title: {he:'מיטת מעבר מונטסורית', en:'Montessori Toddler Bed'}, desc: {he:'מיטת מעבר מונטסורית לילד שלכם: תוכנית בנייה קלה, מפורטת ונגישה, הכוללת את כל השלבים, רשימת החומרים וכלי העבודה כדי שתוכלו לבנות במו ידיכם מיטה בטוחה שתעודד עצמאות, חופש תנועה וביטחון עצמי.', en:'A Montessori toddler transition bed: a clear, easy-to-follow building plan with all steps, materials and tools, so you can build a safe bed that fosters independence, freedom of movement and confidence.'}, price: 25, currency: '₪', img: 'pics/montesorribed.jpg', img2: '', tags: ['bed','kids','montessori'] },
@@ -84,7 +84,7 @@ function planCard(p) {
         <div class="price">${formatPrice(p.price, p.currency)}</div>
       </div>
       <div class="card-actions">
-        <button class="btn primary" onclick="buyPlan(${p.id})">${t[lang].buy}</button>
+  <button class="btn primary" onclick="buyPlan(${p.id})">${t[lang].buy}</button>
       </div>
     </article>
   `;
@@ -110,10 +110,15 @@ function searchPlans(q) {
 }
 
 function buyPlan(id) {
-  const p = plans.find(x => x.id === id);
-  if (!p) return;
-  const lang = currentLang();
-  alert(t[lang].buyMsg(p.title[lang]));
+  // Navigate to checkout page with plan id
+  try {
+    const url = new URL(location.origin + location.pathname.replace(/[^/]*$/, 'checkout.html'));
+    url.searchParams.set('plan', String(id));
+    location.href = url.toString();
+  } catch {
+    // Fallback
+    location.href = 'checkout.html?plan=' + encodeURIComponent(String(id));
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {

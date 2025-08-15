@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>תשלום</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .checkout-wrap{max-width:880px;margin:16px auto;padding:0 12px}
+    .checkout-grid{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px}
+    @media(max-width:900px){.checkout-grid{grid-template-columns:1fr}}
+    .summary .thumb{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#eee}
+    .summary .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .price-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+    .pay-form .row{display:flex;gap:8px}
+    .pay-form .row > *{flex:1}
+    .note{color:#666;font-size:12px;margin-top:6px}
+    .badge{display:inline-block;background:#eef4ee;border:1px solid #d8e7d8;color:#1f3b2a;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+  <div class="top-left"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="לוגו" /></div>
+    <div class="top-actions">
+      <button id="btn-lang" class="btn">english</button>
+      <button id="btn-currency" class="btn">€</button>
+      <button id="btn-units" class="btn">m</button>
+    </div>
+    <h1 class="site-title">עבודת עץ</h1>
+  </header>
+  <nav class="main-nav" aria-label="primary">
+    <div class="nav-wrap">
+      <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+      <a href="plans.html" class="nav-link">תוכניות בנייה להורדה</a>
+      <a href="about.html" class="nav-link">אודות</a>
+      <a href="contact.html" class="nav-link">צור קשר</a>
+    </div>
+  </nav>
+
+  <main class="checkout-wrap">
+    <div class="checkout-grid">
+      <section class="card summary">
+        <div class="card-head"><h2 id="sum-title">סיכום הזמנה</h2><span class="badge">Demo</span></div>
+        <div id="sum-body"></div>
+      </section>
+      <section class="card pay-form">
+        <div class="card-head"><h2 id="pay-title">פרטי תשלום</h2></div>
+        <form id="checkout-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label id="name-label">שם מלא</label>
+              <input id="full-name" required />
+            </div>
+            <div class="form-field">
+              <label id="email-label">אימייל</label>
+              <input id="email" type="email" required />
+            </div>
+            <div class="form-field form-field-full">
+              <label id="card-label">כרטיס אשראי</label>
+              <input id="card-number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" required />
+              <div class="note" id="card-hint">דמו בלבד — לא נגבה תשלום אמיתי</div>
+            </div>
+            <div class="form-field">
+              <label id="exp-label">תוקף</label>
+              <input id="exp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" required />
+            </div>
+            <div class="form-field">
+              <label id="cvc-label">CVC</label>
+              <input id="cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" required />
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top:10px">
+            <button class="btn primary" id="pay-btn" type="submit">שלם עכשיו</button>
+            <div class="form-status" id="status" aria-live="polite"></div>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <small>© 2025 — תוכניות בנייה</small>
+  </footer>
+
+  <script src="site.js"></script>
+  <script src="plans-data.js"></script>
+  <script src="checkout.js"></script>
+</body>
+</html>

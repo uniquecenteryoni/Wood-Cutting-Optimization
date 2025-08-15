@@ -26,6 +26,17 @@
     const html=document.documentElement;
     html.lang = isHe ? 'he' : 'en';
     html.dir = isHe ? 'rtl' : 'ltr';
+    // Update site header branding
+    try {
+      const title = document.querySelector('.topbar .site-title');
+      if (title) title.textContent = isHe ? 'עבודת עץ' : 'wood lab';
+      const logo = document.getElementById('site-logo');
+      if (logo) {
+        // Show logo on Hebrew (RTL) by default; keep it visible also in EN if you want
+        logo.style.display = 'block';
+        logo.setAttribute('alt', isHe ? 'לוגו' : 'Logo');
+      }
+    } catch{}
   }
 
   function updateButtons(){
@@ -76,8 +87,8 @@
         en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    about: 'About',  contact: 'Contact' }
       };
       const pageTitles = {
-        he: { plans: 'תוכניות בנייה להורדה', about: 'אודות', contact: 'צור קשר' },
-        en: { plans: 'Downloadable Plans',    about: 'About', contact: 'Contact' }
+  he: { plans: 'תוכניות בנייה להורדה', about: 'אודות', contact: 'צור קשר' },
+  en: { plans: 'Downloadable Plans',    about: 'About', contact: 'Contact' }
       };
       const links = Array.from(document.querySelectorAll('.main-nav .nav-wrap a'));
       links.forEach(a => {
@@ -91,15 +102,17 @@
       const path = (location.pathname||'').toLowerCase();
       const siteTitle = document.querySelector('.topbar .site-title');
       if (siteTitle) {
+        // Always brand with site name; use document.title to reflect page
+        const siteName = isHe ? 'עבודת עץ' : 'wood lab';
+        siteTitle.textContent = siteName;
         if (path.endsWith('/plans.html') || path.endsWith('plans.html')) {
-          siteTitle.textContent = pageTitles[isHe?'he':'en'].plans;
           document.title = pageTitles[isHe?'he':'en'].plans;
         } else if (path.endsWith('/about.html') || path.endsWith('about.html')) {
-          siteTitle.textContent = pageTitles[isHe?'he':'en'].about;
           document.title = pageTitles[isHe?'he':'en'].about;
         } else if (path.endsWith('/contact.html') || path.endsWith('contact.html')) {
-          siteTitle.textContent = pageTitles[isHe?'he':'en'].contact;
           document.title = pageTitles[isHe?'he':'en'].contact;
+        } else if (path.endsWith('/index.html') || /\/(?:index.html)?$/.test(path)) {
+          document.title = siteName;
         }
       }
     } catch(e){}
