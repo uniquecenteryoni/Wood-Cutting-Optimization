@@ -1895,23 +1895,23 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                                         const svgWrap = document.createElement('div');
                                         svgWrap.style.display = 'block';
                                         svgWrap.style.margin = '0 auto 8px';
-                                        svgWrap.style.height = '64px';
-                                        svgWrap.style.maxWidth = '180px';
+                                        svgWrap.style.height = '96px';
+                                        svgWrap.style.maxWidth = '270px';
                                         svgWrap.innerHTML = `
-                                            <svg width="180" height="64" viewBox="0 0 180 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo">
+                                            <svg width="270" height="96" viewBox="0 0 180 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo">
                                                 <rect x="1" y="1" width="178" height="62" rx="10" fill="#ffffff" stroke="#4caf50" stroke-width="2"/>
-                                                <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-weight="700" font-size="18" fill="#2e7d32">WOOD OPTIMIZER</text>
+                                                <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-weight="700" font-size="24" fill="#2e7d32">WOOD OPTIMIZER</text>
                                             </svg>`;
                                         header.appendChild(svgWrap);
                                 } else {
                                         const headerImg = document.createElement('img');
                                         headerImg.alt = 'logo';
-                                        headerImg.style.maxHeight = '64px';
-                                        headerImg.style.height = '64px';
+                                        headerImg.style.maxHeight = '96px';
+                                        headerImg.style.height = '96px';
                                         headerImg.style.objectFit = 'contain';
                                         headerImg.style.display = 'block';
                                         headerImg.style.margin = '0 auto 8px';
-                                        headerImg.style.maxWidth = '180px';
+                                        headerImg.style.maxWidth = '270px';
                                         headerImg.src = 'pics/logo.png';
                                         headerImg.onerror = () => { try { headerImg.src = 'pic/logo.png'; } catch(_){} };
                                         header.appendChild(headerImg);
