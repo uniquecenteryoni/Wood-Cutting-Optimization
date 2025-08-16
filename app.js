@@ -614,7 +614,8 @@ function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
         .filter(({row}) => String(row[tIdx]) === groupKey.type && String(row[thIdx]) === groupKey.thickness && String(row[wIdx]) === groupKey.width)
         .map(({row,i}) => {
             const Lmm = toMM(row[lenIdx], lengthUnit);
-            const price = parseFloat(String(row[priceIdx]).replace(/[^0-9.\-]/g,''));
+            let price = parseFloat(String(row[priceIdx] ?? '').replace(/[^0-9.\-]/g,''));
+            if (!isFinite(price)) price = 0; // treat empty/invalid as 0
             return { index:i, row, Lmm, price, supplier: row[supplierIdx] };
         })
         .filter(opt => isFinite(opt.Lmm) && isFinite(opt.price) && opt.Lmm > 0 && opt.price >= 0);
@@ -686,7 +687,8 @@ function packPlatesForGroup(groupKey, piecesMM, kerfMM) {
         .map(({row,i}) => {
             const Wmm = toMM(row[wIdx], wUnit);
             const Hmm = toMM(row[lenIdx], lUnit);
-            const price = parseFloat(String(row[priceIdx]).replace(/[^0-9.\-]/g,''));
+            let price = parseFloat(String(row[priceIdx] ?? '').replace(/[^0-9.\-]/g,''));
+            if (!isFinite(price)) price = 0; // treat empty/invalid as 0
             return { index:i, row, Wmm, Hmm, price, supplier: row[supplierIdx] };
         })
         .filter(p => isFinite(p.Wmm) && isFinite(p.Hmm) && p.Wmm>0 && p.Hmm>0);
@@ -1882,11 +1884,15 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                     img{max-width:100%;height:auto}
                     h2{font-size:22px;margin:10px 0 14px}
                     h3{font-size:18px;margin:8px 0 10px}
+                    /* Force logo size in header to 96px height (50% bigger than 64px) */
+                    #pdf-header img{height:96px !important; max-width:270px !important; width:auto !important; display:block; margin:0 auto 8px}
+                    #pdf-header svg{height:96px !important; width:auto !important; display:block; margin:0 auto 8px}
                 `;
                 temp.appendChild(style);
 
                 // Header: centered logo and dynamic title
         const header = document.createElement('div');
+    header.id = 'pdf-header';
     header.style.textAlign = 'center';
     header.style.marginBottom = '12px';
                                 // Header logo
@@ -2228,7 +2234,8 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
             const ppmIdx = getPricePerMeterColIndex();
             const lenIdx = getColumnIndex(['length','אורך']);
             if (ppmIdx >= 0 && priceIdx >= 0 && lenIdx >= 0) {
-                const price = Number(newVals[priceIdx]);
+                const priceRaw = newVals[priceIdx];
+                const price = isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
                 const lenUnit = inventoryUnits[lenIdx] || '';
                 const lenMeters = lengthToMeters(newVals[lenIdx], lenUnit);
                 if (isFinite(price) && isFinite(lenMeters) && lenMeters > 0) {
@@ -2258,7 +2265,8 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
             const ppmIdx = getPricePerMeterColIndex();
             const lenIdx = getColumnIndex(['length','אורך']);
             if (ppmIdx >= 0 && priceIdx >= 0 && lenIdx >= 0) {
-                const price = Number(newVals[priceIdx]);
+                const priceRaw2 = newVals[priceIdx];
+                const price = isFinite(Number(priceRaw2)) ? Number(priceRaw2) : 0;
                 const lenUnit = inventoryUnits[lenIdx] || '';
                 const lenMeters = lengthToMeters(newVals[lenIdx], lenUnit);
                 if (isFinite(price) && isFinite(lenMeters) && lenMeters > 0) {
@@ -2293,7 +2301,8 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
         const cell = tr.querySelector(`td[data-col="${i}"]`);
         return cell ? cell.textContent.trim() : '';
     };
-    const price = Number(getVal(priceIdx));
+    const priceStr = getVal(priceIdx);
+    const price = isFinite(Number(priceStr)) ? Number(priceStr) : 0;
     const lenUnit = inventoryUnits[lenIdx] || '';
     const lenMeters = lengthToMeters(getVal(lenIdx), lenUnit);
     if (isFinite(price) && isFinite(lenMeters) && lenMeters > 0) {
