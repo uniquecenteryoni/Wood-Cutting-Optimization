@@ -225,8 +225,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 /* Calculator header (requirements block) — center controls and enlarge heading */
 #block-req .card-head{flex-direction:column;align-items:center;gap:8px}
 #block-req .card-head h2{font-size:36px}
-#block-req .card-head h2{margin-top:44px}
-#block-req{padding-top:12px}
+
 #block-req .actions.actions-center{justify-content:center}
 #block-req .small-controls{justify-content:flex-start;flex-wrap:wrap}
 #block-req .small-controls .inline{justify-content:flex-start}
@@ -324,7 +323,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 @media(max-width:900px){
 	.main-nav{display:none}
 	.hamburger{
-		position:fixed; z-index:1100; top:50%; transform:translateY(-50%);
+		position:fixed; z-index:1100; top:calc(96px + env(safe-area-inset-top)); transform:none;
 		width:44px; height:72px; border-radius:999px; border:1px solid var(--border);
 		background:#fff; box-shadow:0 4px 20px rgba(0,0,0,.12);
 		display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -333,7 +332,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 	html[dir="ltr"] .hamburger{ left:10px }
 	.hamburger .bars{display:flex; gap:6px}
 	.hamburger .bar{width:4px; height:24px; background:#2b2b2b; border-radius:3px}
-	.hamburger:active{transform:translateY(-50%) scale(.96)}
+	.hamburger:active{transform:scale(.96)}
 
 	.drawer-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:1099; display:none}
 	.drawer-backdrop.open{display:block}
@@ -352,9 +351,15 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* ===== Mobile Block 1 layout tweaks ===== */
 @media(max-width:700px){
 	/* Show project name at the very top of Block 1 header */
-	#block-req .card-head{align-items:center; gap:8px}
+	#block-req .card-head{position:static; align-items:center; gap:8px}
 	#block-req .card-head .req-name{position:static; order:0; align-self:stretch; display:flex; justify-content:center}
 	#block-req .card-head h2{order:1; margin: 0}
-	/* Keep saw control inside header, next to the title */
-	#block-req .card-head .req-saw{display:flex !important; position:static; order:2}
+	/* Hide original saw row on mobile */
+		#block-req .card-head .req-saw{display:none !important}
+		#block-req{display:flex; flex-direction:column; position:relative}
+	/* Mobile saw settings trigger */
+		#saw-settings-btn{display:inline-flex !important; position:absolute; top:0; left:0; right:auto; font-size:20px; width:40px; height:40px; align-items:center; justify-content:center}
+		.saw-popover{position:absolute; top:48px; left:0; right:auto; background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.16); z-index:20}
+	/* Spacing when project name sits below the buttons */
+		#block-req .req-name.is-mobile-below{margin-top:10px; justify-content:center}
 }

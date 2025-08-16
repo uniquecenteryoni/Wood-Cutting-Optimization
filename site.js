@@ -215,6 +215,62 @@
     if (bUnits) bUnits.addEventListener('click', toggleUnits);
     const bCur = el('#btn-currency');
     if (bCur) bCur.addEventListener('click', cycleCurrency);
+    // Mobile: Saw thickness popover in Block 1
+    try{
+      const mqSaw = window.matchMedia('(max-width: 700px)');
+      const btn = document.getElementById('saw-settings-btn');
+      const pop = document.getElementById('saw-popover');
+      const inputMain = document.getElementById('saw-thickness');
+      const unitMain = document.getElementById('saw-unit');
+      const input = document.getElementById('saw-popover-input');
+      const unit = document.getElementById('saw-popover-unit');
+      const save = document.getElementById('saw-popover-save');
+      const cancel = document.getElementById('saw-popover-cancel');
+      const sync = () => {
+        if (!inputMain || !input || !unit || !unitMain) return;
+        input.value = inputMain.value;
+        unit.textContent = unitMain.textContent || 'mm';
+      };
+      const updateVis = () => {
+        const on = mqSaw.matches;
+        if (btn) btn.hidden = !on;
+        if (pop) { pop.hidden = true; try{pop.style.display='none';}catch{} }
+        if (btn) btn.setAttribute('aria-expanded','false');
+      };
+      updateVis();
+      mqSaw.addEventListener('change', updateVis);
+      if (btn && pop && inputMain && input && save && cancel){
+        btn.addEventListener('click', ()=>{
+          // Toggle behavior: second click closes
+          const isOpen = pop && pop.hidden === false && pop.style.display !== 'none';
+          if (isOpen){
+            try{ pop.hidden = true; pop.style.display='none'; }catch{}
+            btn.setAttribute('aria-expanded','false');
+            return;
+          }
+          sync();
+          try{ pop.hidden = false; pop.style.display='block'; }catch{}
+          btn.setAttribute('aria-expanded','true');
+        });
+        cancel.addEventListener('click', ()=>{
+          try{ pop.hidden = true; pop.style.display='none'; }catch{}
+          btn.setAttribute('aria-expanded','false');
+        });
+        save.addEventListener('click', ()=>{
+          if (inputMain) inputMain.value = input.value;
+          // Fire input event so any listeners update
+          try { inputMain.dispatchEvent(new Event('input', { bubbles:true })); } catch{}
+          try{ pop.hidden = true; pop.style.display='none'; }catch{}
+          btn.setAttribute('aria-expanded','false');
+        });
+        // Close popover when clicking outside
+        document.addEventListener('click', (e)=>{
+          if (!pop || pop.hidden) return;
+          const inside = e.target === pop || pop.contains(e.target) || e.target === btn || btn.contains(e.target);
+          if (!inside) { try{ pop.hidden = true; pop.style.display='none'; }catch{} btn.setAttribute('aria-expanded','false'); }
+        });
+      }
+    }catch{}
 
     // Mobile drawer setup (present on index page; safe-guard checks on others)
     try {
@@ -225,13 +281,10 @@
       const updateVisibility = () => {
         const on = mqMobile.matches;
         if (hamburger) hamburger.hidden = !on;
-        // Keep drawer/backdrop hidden by default until opened
-        if (drawer) drawer.hidden = !on; // enable in mobile mode (but closed until open)
-        if (backdrop) backdrop.hidden = !on;
+        // Keep drawer/backdrop hidden by default; only openDrawer removes it
+  if (drawer) { drawer.classList.remove('open'); drawer.hidden = true; try{drawer.style.display='none';}catch{} }
+  if (backdrop) { backdrop.classList.remove('open'); backdrop.hidden = true; try{backdrop.style.display='none';}catch{} }
         if (!on) {
-          // ensure closed on desktop
-          drawer && drawer.classList.remove('open');
-          backdrop && backdrop.classList.remove('open');
           hamburger && hamburger.setAttribute('aria-expanded','false');
         }
       };
@@ -241,8 +294,13 @@
   mqMobile.addEventListener('change', (e)=>{ if (!e.matches) { try{ drawer && drawer.classList.remove('open'); backdrop && backdrop.classList.remove('open'); hamburger && hamburger.setAttribute('aria-expanded','false'); }catch{} } });
       const openDrawer = () => {
         if (!drawer || !backdrop || !hamburger) return;
-  // Ensure elements are visible
-  try { drawer.hidden = false; backdrop.hidden = false; } catch{}
+        // Ensure elements are visible
+        try { drawer.hidden = false; drawer.removeAttribute('hidden'); } catch{}
+        try { backdrop.hidden = false; backdrop.removeAttribute('hidden'); } catch{}
+  try { drawer.style.display = 'block'; } catch{}
+  try { backdrop.style.display = 'block'; } catch{}
+  // Fallback: force transform to visible in case CSS class is overridden
+  try { drawer.style.transform = 'translateX(0)'; } catch{}
         drawer.classList.add('open');
         backdrop.classList.add('open');
         hamburger.setAttribute('aria-expanded','true');
@@ -252,6 +310,10 @@
         drawer.classList.remove('open');
         backdrop.classList.remove('open');
         hamburger.setAttribute('aria-expanded','false');
+        // Immediately hide to avoid stray focus
+  try { drawer.hidden = true; drawer.style.display='none'; } catch{}
+  try { backdrop.hidden = true; backdrop.style.display='none'; } catch{}
+  try { drawer.style.transform = ''; } catch{}
       };
       if (hamburger) hamburger.addEventListener('click', ()=>{
         if (drawer && drawer.classList.contains('open')) closeDrawer(); else openDrawer();
@@ -265,7 +327,32 @@
       });
     } catch{}
 
-  // Index page: keep saw control in header on mobile; CSS handles placement next to title
-  // (No DOM moves needed.)
+    // Index page: on mobile, move Project Name below the buttons; restore in header on desktop
+    try {
+      const path = (location.pathname || '').toLowerCase();
+      const isIndex = path.endsWith('/index.html') || path.endsWith('index.html') || /\/(?:index.html)?$/.test(path);
+      if (isIndex) {
+        const mq = window.matchMedia('(max-width: 700px)');
+        const nameRow = document.querySelector('#block-req .req-name');
+        const actions = document.querySelector('#block-req .actions.actions-center');
+        const head = document.querySelector('#block-req .card-head');
+        const ensurePlacement = () => {
+          if (!nameRow || !actions || !head) return;
+          if (mq.matches) {
+            if (!nameRow.classList.contains('is-mobile-below')) {
+              actions.insertAdjacentElement('afterend', nameRow);
+              nameRow.classList.add('is-mobile-below');
+            }
+          } else {
+            if (nameRow.classList.contains('is-mobile-below')) {
+              head.insertAdjacentElement('afterbegin', nameRow);
+              nameRow.classList.remove('is-mobile-below');
+            }
+          }
+        };
+        ensurePlacement();
+        mq.addEventListener('change', ensurePlacement);
+      }
+    } catch{}
   });
 })();
