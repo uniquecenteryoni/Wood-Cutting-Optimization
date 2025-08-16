@@ -127,7 +127,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const lang = currentLang();
   if (input) input.placeholder = t[lang].search;
   const chip = document.querySelector('.plans-toolbar .chip');
-  if (chip) chip.childNodes[0].nodeValue = t[lang].total + ' ';
+  if (chip) chip.childNodes[0].nodeValue = t[lang].total.replace(/"/g,'') + ' ';
   render(plans);
   input.addEventListener('input', () => render(searchPlans(input.value)));
 });

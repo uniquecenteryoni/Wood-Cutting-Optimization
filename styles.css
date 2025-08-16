@@ -28,6 +28,9 @@ h3{font-size:18px}
 html[dir="rtl"] body{ text-align:right }
 html[dir="rtl"] body{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
 html[dir="ltr"] body{font-family:'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
+/* Make English slightly larger to match Hebrew visual weight */
+html[dir="ltr"] body{ font-size: 18px }
+html[dir="rtl"] body{ font-size: 16px }
 html[dir="ltr"] body{ text-align:left }
 html[dir="rtl"] .container, html[dir="rtl"] .card{ text-align:right }
 html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
@@ -51,6 +54,9 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 /* Full-bleed page sections: only top-level cards under .container become flat bands */
 .container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:56px 16px}
 .container > .card + .card{border-top:1px solid var(--border)}
+.container > #block-req.card:hover,
+.container > #block-db.card:hover,
+.container > #block-res.card:hover{ background: #fdfcfb }
 .card-head{display:flex;justify-content:space-between;align-items:center;position:relative;gap:8px}
 .card-head h2{margin:0 auto}
 .card-head .req-name{position:absolute;right:0;left:auto;top:0;display:flex;align-items:flex-start}
@@ -97,11 +103,17 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 	color:#1f3b2a;
 }
 .btn.btn-save:hover, .btn.btn-save-new:hover, #project-name-ok:hover{background:#d9e9d9}
+/* Saved state after clicking save */
+.btn.btn-save.saved, .btn.btn-save-new.saved, #project-name-ok.saved{
+	background:#4caf50;
+	border-color:#3e8e41;
+	color:#fff;
+}
 .inline{display:flex;gap:6px;align-items:center}
 .chip{display:inline-block;padding:0 6px;border-radius:10px;background:#eee;font-size:12px}
 .hidden{display:none}
-#requirements-list .req-row{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed #eee}
-.req-row select,.req-row input{padding:6px;border:1px solid #ddd;border-radius:6px}
+#requirements-list .req-row{display:grid;grid-template-columns: 1.2fr 1.2fr 1.1fr 1fr 0.8fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed #eee;width:min(100%, 980px)}
+.req-row select,.req-row input{padding:6px;border:1px solid #ddd;border-radius:6px;width:100%;min-width:0}
 .req-row .btn-remove{
 	background:#e57373; /* softer red */
 	color:#fff;
@@ -111,6 +123,11 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .req-row .btn-remove:hover{background:#d32f2f;border-color:#b71c1c;color:#fff}
 .req-row .btn-remove:active{background:#c62828;border-color:#8e1111;color:#fff}
 .req-row .btn-remove:focus{outline:none;box-shadow:0 0 0 3px rgba(211,47,47,.25)}
+@media(max-width: 900px){
+	#requirements-list .req-row{grid-template-columns: 1fr 1fr}
+	#requirements-list .req-row > *:nth-child(5){grid-column:1/2}
+	#requirements-list .req-row > *:nth-child(6){grid-column:2/3; justify-self:end}
+}
 .db-table{width:100%;border-collapse:collapse}
 .db-table th,.db-table td{padding:8px;border:1px solid var(--border);text-align:center;font:inherit}
 .db-table thead th{font-size:16px}
@@ -196,6 +213,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .plan-card .card-actions{padding:0 12px 12px}
 /* About */
 .about-wrap{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:center}
+.about-wrap .about-text{padding-inline: clamp(16px, 6vw, 64px); max-width: 48ch}
 .about-photo img{width:100%;height:auto;border-radius:12px;border:1px solid var(--border);display:block}
 .about-text h2{margin-top:0}
 .about-meta{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
@@ -282,6 +300,7 @@ body.initial-compact-tight h2{font-size:28px}
 .form-field-full{grid-column:1/-1}
 .form-field label{font-size:14px;color:#333}
 .form-field input,.form-field textarea{padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#fff}
+.form-field input,.form-field textarea{ background: #faf6f2 }
 .form-field input:focus,.form-field textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(106,143,107,.15)}
 .form-actions{display:flex;gap:8px;justify-content:flex-start}
 .form-actions .btn{font-weight:100}

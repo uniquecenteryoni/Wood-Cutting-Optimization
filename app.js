@@ -47,7 +47,8 @@ const translations = {
         fontSize: 'גודל גופן',
         regular: 'רגיל',
         bold: 'בולט',
-        extraInfo: 'מידע נוסף'
+        extraInfo: 'מידע נוסף',
+        save: 'שמור'
     },
     en: {
         title: 'Wood Cutting Optimization',
@@ -69,7 +70,8 @@ const translations = {
         fontSize: 'Font weight',
         regular: 'Regular',
         bold: 'Bold',
-        extraInfo: 'Extra info'
+        extraInfo: 'Extra info',
+        save: 'save'
     }
 };
 
@@ -470,7 +472,7 @@ function renderInventoryTable() {
             }
             return `<td contenteditable="true" data-col="${i}"></td>`;
         }).join('')}<td>
-            <button class="btn btn-save-new">${language === 'he' ? 'שמור' : 'Save'}</button>
+            <button class="btn btn-save-new">${translations[language]?.save || (language === 'he' ? 'שמור' : 'save')}</button>
             <button class="btn btn-cancel-new">${language === 'he' ? 'בטל' : 'Cancel'}</button>
           </td></tr>`
         : '';
@@ -512,7 +514,7 @@ function renderInventoryTable() {
             return `<td ${editingRows.has(rowIndex) ? 'contenteditable="true"' : ''} data-col="${i}">${display ?? ''}</td>`;
         }).join('');
         const actions = editingRows.has(rowIndex)
-            ? `<button class="btn btn-save" data-row="${rowIndex}">${language === 'he' ? 'שמור' : 'Save'}</button>
+            ? `<button class=\"btn btn-save\" data-row=\"${rowIndex}\">${translations[language]?.save || (language === 'he' ? 'שמור' : 'save')}</button>
                <button class="btn btn-cancel" data-row="${rowIndex}">${language === 'he' ? 'בטל' : 'Cancel'}</button>`
             : `<button class="btn btn-edit" data-row="${rowIndex}" title="${language === 'he' ? 'עריכה' : 'Edit'}">✏️</button>
                <button class="btn btn-del" data-row="${rowIndex}" title="${language === 'he' ? 'הסר' : 'Delete'}">✖</button>`;
@@ -1356,18 +1358,18 @@ function renderResults(results) {
             clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="10" width="${pw}" height="40" /></clipPath>`);
             if (displaySettings.showPieceLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-                if (pw >= 80) {
-                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="12" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?'':' '} ${unitSystem==='imperial'?'':unitStr}</text>`);
-                } else if (pw >= 36) {
+                if (pw >= 86) {
+                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?'':' '} ${unitSystem==='imperial'?'':unitStr}</text>`);
+                } else if (pw >= 42) {
                     const yTop = 28;
                     if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yTop}" font-size="11" text-anchor="middle" fill="#333">${numStr}${unitShort}</text>`);
+                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#333">${numStr}${unitShort}</text>`);
                     } else {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yTop}" font-size="11" text-anchor="middle" fill="#333">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
+                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#333">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
                     }
                 } else {
                     // תמיד בתוך החתיכה: הצג מספר בלבד במרכז, פונט קטן
-                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="10" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
+                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="11" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
                 }
             }
             x += pw;
@@ -1391,17 +1393,17 @@ function renderResults(results) {
             const clipIdW = `${svgId}_clip_waste`;
             clipDefs.push(`<clipPath id="${clipIdW}"><rect x="${x}" y="10" width="${wasteW}" height="40" /></clipPath>`);
             const weightW = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-            if (wasteW >= 80) {
-                rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="12" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:' '+unitStr}</text>`);
-            } else if (wasteW >= 36) {
+            if (wasteW >= 86) {
+                rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:' '+unitStr}</text>`);
+            } else if (wasteW >= 42) {
                 const yTop = 28;
                 if (unitSystem==='imperial') {
-                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="11" text-anchor="middle" fill="#666">${numStr}${unitShort}</text>`);
+                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}${unitShort}</text>`);
                 } else {
-                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="11" text-anchor="middle" fill="#666">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
+                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
                 }
             } else {
-                rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="10" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
+                rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="11" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
             }
         }
         // קו עדין לכל רוחב המסך + טקסט אורך קורה ממורכז מעל הקו
@@ -1420,7 +1422,7 @@ function renderResults(results) {
     const baseLineLeft = `<line x1="0" y1="${lineY}" x2="${leftX2}" y2="${lineY}" stroke="#ccc" stroke-width="1" />`;
     const baseLineRight = `<line x1="${rightX1}" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="#ccc" stroke-width="1" />`;
     const weightBase = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-    const rulerText = `<text ${weightBase} x="${center}" y="${lineY-2}" font-size="12" text-anchor="middle" fill="#444">${beamLenLbl}</text>`;
+    const rulerText = `<text ${weightBase} x="${center}" y="${lineY-2}" font-size="13" text-anchor="middle" fill="#444">${beamLenLbl}</text>`;
     const defs = `<defs>${defsBase}${clipDefs.join('')}</defs>`;
     return `<svg class="diagram" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${defs}${rects.join('')}${baseLineLeft}${baseLineRight}${rulerText}</svg>`;
     }
@@ -1478,18 +1480,18 @@ function renderResults(results) {
             if (displaySettings.showPieceLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                 if (fitsWide) {
-                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="#333">${label}</text>`);
+                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="#333">${label}</text>`);
                 } else if (fitsMedium) {
                     if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}</text>`);
+                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}</text>`);
                     } else {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy-6}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
+                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy-6}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
                     }
                 } else {
                     if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}</text>`);
+                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}</text>`);
                     } else {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}×${formatSmart(hDisp)}</text>`);
+                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}×${formatSmart(hDisp)}</text>`);
                     }
                 }
             }
@@ -1519,13 +1521,13 @@ function renderResults(results) {
                     const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                     const color = '#555';
                     if (fitsWide) {
-                        rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="${color}">${labelInline}</text>`);
+                        rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="${color}">${labelInline}</text>`);
                     } else if (fitsMedium) {
                         if (unitSystem==='imperial') {
-                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}${inchSym}×${formatSmart(hDisp)}${inchSym}</text>`);
+                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}${inchSym}×${formatSmart(hDisp)}${inchSym}</text>`);
                         } else {
                             // בשתי שורות: מספרים ואז יחידה
-                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy-6}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
+                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy-6}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
                         }
                     }
                 }
@@ -1536,7 +1538,7 @@ function renderResults(results) {
         ? `${formatSmart(PW/25.4)}″×${formatSmart(PH/25.4)}″`
         : `${formatSmart(PW/1000)}×${formatSmart(PH/1000)} ${language==='he' ? 'מ׳*מ׳' : 'm*m'}`;
     const weightSize = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-    const sizeText = `<text ${weightSize} x="${platePxW/2}" y="${platePxH + extraBottom - 8}" font-size="12" text-anchor="middle" fill="#444">${plateSizeLbl}</text>`;
+    const sizeText = `<text ${weightSize} x="${platePxW/2}" y="${platePxH + extraBottom - 8}" font-size="13" text-anchor="middle" fill="#444">${plateSizeLbl}</text>`;
     return `<svg class="diagram" viewBox="0 0 ${viewW} ${platePxH + extraBottom}" preserveAspectRatio="none">${defs}${rects.join('')}${sizeText}</svg>`;
     }
 
@@ -1842,9 +1844,233 @@ if (fileInput) {
     }));
 }
 
+// Visual feedback for project name save button
+const projectNameOkBtn = document.getElementById('project-name-ok');
+if (projectNameOkBtn) {
+    projectNameOkBtn.addEventListener('click', () => {
+        projectNameOkBtn.classList.add('saved');
+        setTimeout(() => projectNameOkBtn.classList.remove('saved'), 2000);
+    });
+}
+
 const exportBtn = document.getElementById('export-pdf');
-if (exportBtn) exportBtn.addEventListener('click', () => {
-    console.log('Export PDF clicked');
+if (exportBtn) exportBtn.addEventListener('click', async () => {
+    try {
+        const resultsSection = document.getElementById('block-res');
+        const resultsArea = document.getElementById('results-area');
+        if (!resultsSection || !resultsArea) return;
+    const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!jsPDFCtor || typeof window.html2canvas === 'undefined') return;
+
+                // Build a temporary wrapper that includes the H2 title and ALL tables + diagrams
+                const titleEl = resultsSection.querySelector('h2');
+        const temp = document.createElement('div');
+        temp.style.background = '#fff';
+        temp.style.padding = '16px';
+        temp.style.maxWidth = '900px';
+        temp.style.margin = '0 auto';
+                // Make content responsive inside capture
+                const style = document.createElement('style');
+                style.textContent = `
+                    /* Base font larger for PDF */
+                    #results-area, #results-area * { font-size: 16px; line-height: 1.45; }
+                    /* Avoid canvas taint from CSS background images/filters */
+                    #results-area, #results-area * { background-image: none !important; filter: none !important; }
+                    .db-table{width:100%;border-collapse:collapse}
+                    .db-table th,.db-table td{padding:8px;border:1px solid #ddd;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+                    .diagram{width:100%;height:auto}
+                    img{max-width:100%;height:auto}
+                    h2{font-size:22px;margin:10px 0 14px}
+                    h3{font-size:18px;margin:8px 0 10px}
+                `;
+                temp.appendChild(style);
+
+                // Header: centered logo and dynamic title
+        const header = document.createElement('div');
+    header.style.textAlign = 'center';
+    header.style.marginBottom = '12px';
+                                // Header logo
+                                if (location.protocol === 'file:') {
+                                        // Under file:// browsers block loading local images into canvas; use inline SVG fallback so header still shows
+                                        const svgWrap = document.createElement('div');
+                                        svgWrap.style.display = 'block';
+                                        svgWrap.style.margin = '0 auto 8px';
+                                        svgWrap.style.height = '64px';
+                                        svgWrap.style.maxWidth = '180px';
+                                        svgWrap.innerHTML = `
+                                            <svg width="180" height="64" viewBox="0 0 180 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo">
+                                                <rect x="1" y="1" width="178" height="62" rx="10" fill="#ffffff" stroke="#4caf50" stroke-width="2"/>
+                                                <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-weight="700" font-size="18" fill="#2e7d32">WOOD OPTIMIZER</text>
+                                            </svg>`;
+                                        header.appendChild(svgWrap);
+                                } else {
+                                        const headerImg = document.createElement('img');
+                                        headerImg.alt = 'logo';
+                                        headerImg.style.maxHeight = '64px';
+                                        headerImg.style.height = '64px';
+                                        headerImg.style.objectFit = 'contain';
+                                        headerImg.style.display = 'block';
+                                        headerImg.style.margin = '0 auto 8px';
+                                        headerImg.style.maxWidth = '180px';
+                                        headerImg.src = 'pics/logo.png';
+                                        headerImg.onerror = () => { try { headerImg.src = 'pic/logo.png'; } catch(_){} };
+                                        header.appendChild(headerImg);
+                                }
+    const projName = (document.getElementById('project-name')?.value || '').trim();
+    // No hyphen between title and project name
+    const pdfTitle = (language === 'he' ? 'פרויקט' : 'Project') + (projName ? ' ' + projName : '');
+    const h = document.createElement('h2');
+        h.textContent = pdfTitle;
+    h.style.margin = '10px 0 0';
+        h.style.textAlign = 'center';
+        header.appendChild(h);
+
+        temp.appendChild(header);
+                // Clone ALL results content
+                const clonedArea = resultsArea.cloneNode(true);
+                // Remove the display settings strip/panel from the export
+                const ds = clonedArea.querySelector('#display-settings');
+                if (ds) ds.remove();
+                const dsp = clonedArea.querySelector('#display-settings-panel');
+                if (dsp) dsp.remove();
+                const dsBtn = clonedArea.querySelector('#btn-display-settings');
+                if (dsBtn) dsBtn.remove();
+                // Increase spacing between sections/tables for nicer gaps in PDF
+                        const style2 = document.createElement('style');
+                style2.textContent = `
+                            .results-section { margin-bottom: 36px !important; }
+                            table { margin: 0 0 22px 0 !important; }
+                `;
+                temp.appendChild(style2);
+                // Mark local images as CORS-anonymous and skip any remote images during capture
+                Array.from(clonedArea.querySelectorAll('img')).forEach(img => {
+                    try { if (!/^https?:/i.test(img.src)) img.crossOrigin = 'anonymous'; } catch(_){}
+                });
+                temp.appendChild(clonedArea);
+        document.body.appendChild(temp);
+
+        // Ensure images in header/results are loaded before capture
+        await new Promise(resolve => {
+            const imgs = Array.from(temp.querySelectorAll('img'));
+            let remaining = imgs.length;
+            if (remaining === 0) return resolve();
+            const done = () => { remaining--; if (remaining <= 0) resolve(); };
+            imgs.forEach(i => {
+                if (i.complete) return done();
+                i.addEventListener('load', done, { once: true });
+                i.addEventListener('error', done, { once: true });
+            });
+            // safety timeout
+            setTimeout(resolve, 2000);
+        });
+
+                                                // Render to canvas (skip taint sources: iframes/canvas; allow same-origin images; skip cross-origin)
+                const canvas = await window.html2canvas(temp, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    logging: false,
+                    imageTimeout: 0,
+                    ignoreElements: (el) => {
+                        try {
+                                                    const tag = el.tagName;
+                                                    if (tag === 'IFRAME' || tag === 'CANVAS') return true;
+                                                    if (tag === 'IMG') {
+                                                                const src = el.getAttribute('src') || '';
+                                                                if (!/^https?:/i.test(src)) {
+                                                                    // relative or data: under http/https allowed; under file://, SVG fallback used, so ok
+                                                                    return false;
+                                                                }
+                                                                // http/https: allow only same-origin
+                                                                try { const u = new URL(src, location.href); return u.origin !== location.origin; } catch { return true; }
+                                                    }
+                                                    return false;
+                        } catch (_) { return false; }
+                    }
+                });
+        document.body.removeChild(temp);
+
+        // Create PDF (A4 portrait)
+    const pdf = new jsPDFCtor('p', 'mm', 'a4');
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+
+        // Scale image to fit width with preserved ratio and paginate by slicing the canvas
+        const imgWpx = canvas.width, imgHpx = canvas.height;
+        const margin = 10; // mm
+        const pdfW = pageW - margin * 2;
+        const pxPerMm = imgWpx / pdfW; // how many pixels per mm at this width
+        const pageContentHpx = (pageH - margin * 2) * pxPerMm; // max pixels per page height
+        let offsetYpx = 0;
+        const makeSlice = (src, sy, sh) => {
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = imgWpx;
+            pageCanvas.height = sh;
+            const ctx = pageCanvas.getContext('2d');
+            ctx.drawImage(src, 0, sy, imgWpx, sh, 0, 0, imgWpx, sh);
+            return pageCanvas.toDataURL('image/png');
+        };
+        while (offsetYpx < imgHpx) {
+            const sliceHpx = Math.min(pageContentHpx, imgHpx - offsetYpx);
+            const dataUrl = makeSlice(canvas, offsetYpx, sliceHpx);
+            const sliceHmm = sliceHpx / pxPerMm;
+            pdf.addImage(dataUrl, 'PNG', margin, margin, pdfW, sliceHmm, undefined, 'FAST');
+            offsetYpx += sliceHpx;
+            if (offsetYpx < imgHpx) pdf.addPage();
+        }
+
+        // Append a centered Hebrew quote and contact at the bottom of the LAST page
+        try {
+            const finalWrap = document.createElement('div');
+            finalWrap.style.cssText = 'position:fixed;left:-99999px;top:0;background:#fff;width:900px;max-width:900px;min-height:200px;padding:0 24px 0;display:flex;align-items:center;justify-content:center;text-align:center;direction:rtl;';
+            const finalInner = document.createElement('div');
+            finalInner.style.cssText = 'max-width:760px; margin:0 auto;';
+            const quote = document.createElement('div');
+            quote.textContent = '"בעבודה עם עץ, כל חיתוך הוא בחירה, וכל חיבור הוא סיפור. שמרו על דיוק, הקפידו על בטיחות, ותנו ליצירה שלכם לדבר בעד עצמה."';
+            quote.style.cssText = 'font-weight:700; font-size:20px; line-height:1.6; margin-bottom:12px;';
+            const contact = document.createElement('div');
+            contact.textContent = 'בהצלחה גדולה ! מוזמנים לשלוח לי מה יצא לכם במייל unique.center.yoni@gmail.com';
+            contact.style.cssText = 'font-size:16px; line-height:1.6;';
+            finalInner.appendChild(quote);
+            finalInner.appendChild(contact);
+            finalWrap.appendChild(finalInner);
+            document.body.appendChild(finalWrap);
+
+            await new Promise(r => setTimeout(r, 50));
+            const finalCanvas = await window.html2canvas(finalWrap, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                logging: false,
+                imageTimeout: 0,
+                ignoreElements: (el) => {
+                    try {
+                        const tag = el.tagName;
+                        if (tag === 'IFRAME' || tag === 'CANVAS') return true;
+                        if (tag === 'IMG') return /^https?:/i.test(el.src);
+                        return false;
+                    } catch (_) { return false; }
+                }
+            });
+            document.body.removeChild(finalWrap);
+
+            const fWpx = finalCanvas.width, fHpx = finalCanvas.height;
+            const fPdfW = pageW - margin * 2;
+            const fRatio = fWpx / fPdfW; // px per mm at this width
+            const fHmm = Math.min(fHpx / fRatio, pageH * 0.22); // cap footer height to ~22% page
+            const fY = pageH - margin - fHmm; // stick to bottom within margins
+            const x = margin;
+            // Optional white background bar for readability
+            try { pdf.setFillColor(255,255,255); pdf.rect(x, fY, fPdfW, fHmm, 'F'); } catch(_){ }
+            pdf.addImage(finalCanvas.toDataURL('image/png'), 'PNG', x, fY, fPdfW, fHmm, undefined, 'FAST');
+        } catch(_) { /* ignore final page errors and continue */ }
+
+    // File name (no hyphen between title and project name)
+    const prefix = language === 'he' ? 'פרויקט ' : 'Project ';
+    const base = (projName || '').trim() || (language === 'he' ? 'ללא שם' : 'Untitled');
+    const fileNameBase = (prefix + base).replace(/[\/:*?"<>|]+/g,'_');
+    pdf.save(`${fileNameBase}.pdf`);
+    } catch (e) { console.error(e); }
 });
 
 // האזור לסטטוס טעינת מאגר
@@ -2011,8 +2237,10 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
             }
             inventoryData[idx] = newVals;
             saveData('inventoryData', inventoryData);
+            // Visual feedback: mark button as saved, then re-render shortly after
+            try { btn.classList.add('saved'); } catch(_){}
             editingRows.delete(idx);
-            renderInventoryTable();
+            setTimeout(() => { try { btn.classList.remove('saved'); } catch(_){}; renderInventoryTable(); }, 220);
         }
     } else if (btn.classList.contains('btn-save-new')) {
         const tr = btn.closest('tr');
@@ -2040,9 +2268,10 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
             inventoryData.unshift(newVals);
             saveData('inventoryData', inventoryData);
         }
+        // Visual feedback: mark saved before re-render
+        try { btn.classList.add('saved'); } catch(_){ }
         showNewInventoryRow = false;
-        renderInventoryTable();
-        refreshRequirementTypeOptions();
+        setTimeout(() => { try { btn.classList.remove('saved'); } catch(_){}; renderInventoryTable(); refreshRequirementTypeOptions(); }, 220);
     } else if (btn.classList.contains('btn-cancel-new')) {
         showNewInventoryRow = false;
         renderInventoryTable();
