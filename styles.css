@@ -306,3 +306,55 @@ body.initial-compact-tight h2{font-size:28px}
 .form-actions .btn{font-weight:100}
 .form-status{margin-top:8px;color:var(--muted)}
 @media(max-width:700px){.form-grid{grid-template-columns:1fr}}
+
+/* Mobile enhancements: safer text scaling, fluid diagrams, table scroll, and narrow stacking */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.diagram svg{max-width:100%;height:auto;display:block}
+@media(max-width:640px){
+	.db-area{-webkit-overflow-scrolling:touch}
+	#db-table-wrap{overflow-x:auto}
+}
+@media(max-width:520px){
+	#requirements-list .req-row{grid-template-columns:1fr}
+	#requirements-list .req-row > *{grid-column:1/-1 !important; justify-self:stretch}
+}
+
+/* ===== Mobile side drawer navigation ===== */
+/* Hide the horizontal nav on mobile, show a floating hamburger on the side */
+@media(max-width:900px){
+	.main-nav{display:none}
+	.hamburger{
+		position:fixed; z-index:1100; top:50%; transform:translateY(-50%);
+		width:44px; height:72px; border-radius:999px; border:1px solid var(--border);
+		background:#fff; box-shadow:0 4px 20px rgba(0,0,0,.12);
+		display:flex; align-items:center; justify-content:center; cursor:pointer;
+	}
+	html[dir="rtl"] .hamburger{ right:10px }
+	html[dir="ltr"] .hamburger{ left:10px }
+	.hamburger .bars{display:flex; gap:6px}
+	.hamburger .bar{width:4px; height:24px; background:#2b2b2b; border-radius:3px}
+	.hamburger:active{transform:translateY(-50%) scale(.96)}
+
+	.drawer-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:1099; display:none}
+	.drawer-backdrop.open{display:block}
+	.mobile-drawer{
+		position:fixed; top:0; bottom:0; width:min(76vw, 320px);
+		background:#fff; border-left:1px solid var(--border); border-right:1px solid var(--border);
+		box-shadow:0 8px 28px rgba(0,0,0,.16); z-index:1101; padding:16px; overflow:auto;
+		transition:transform .22s ease;
+	}
+	html[dir="rtl"] .mobile-drawer{ right:0; transform:translateX(100%) }
+	html[dir="ltr"] .mobile-drawer{ left:0;  transform:translateX(-100%) }
+	.mobile-drawer.open{ transform:translateX(0) }
+	.mobile-drawer .nav-link{display:block; padding:12px 10px; border-radius:10px; margin-bottom:6px}
+}
+
+/* ===== Mobile Block 1 layout tweaks ===== */
+@media(max-width:700px){
+	/* Show project name at the very top of Block 1 header */
+	#block-req .card-head{align-items:center; gap:8px}
+	#block-req .card-head .req-name{position:static; order:0; align-self:stretch; display:flex; justify-content:center}
+	#block-req .card-head h2{order:1; margin: 0}
+	/* Keep saw control inside header, next to the title */
+	#block-req .card-head .req-saw{display:flex !important; position:static; order:2}
+}

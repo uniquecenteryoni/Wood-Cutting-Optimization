@@ -183,7 +183,7 @@
   he: { plans: 'תוכניות בנייה להורדה', about: 'אודות', contact: 'צור קשר' },
   en: { plans: 'Downloadable Plans',    about: 'About', contact: 'Contact' }
       };
-      const links = Array.from(document.querySelectorAll('.main-nav .nav-wrap a'));
+  const links = Array.from(document.querySelectorAll('.main-nav .nav-wrap a, #mobile-drawer a'));
       links.forEach(a => {
         const href = (a.getAttribute('href')||'').split('?')[0];
         if (href.endsWith('index.html')) a.textContent = labels[isHe?'he':'en'].index;
@@ -215,5 +215,57 @@
     if (bUnits) bUnits.addEventListener('click', toggleUnits);
     const bCur = el('#btn-currency');
     if (bCur) bCur.addEventListener('click', cycleCurrency);
+
+    // Mobile drawer setup (present on index page; safe-guard checks on others)
+    try {
+      const mqMobile = window.matchMedia('(max-width: 900px)');
+      const hamburger = document.getElementById('hamburger');
+      const drawer = document.getElementById('mobile-drawer');
+      const backdrop = document.getElementById('drawer-backdrop');
+      const updateVisibility = () => {
+        const on = mqMobile.matches;
+        if (hamburger) hamburger.hidden = !on;
+        // Keep drawer/backdrop hidden by default until opened
+        if (drawer) drawer.hidden = !on; // enable in mobile mode (but closed until open)
+        if (backdrop) backdrop.hidden = !on;
+        if (!on) {
+          // ensure closed on desktop
+          drawer && drawer.classList.remove('open');
+          backdrop && backdrop.classList.remove('open');
+          hamburger && hamburger.setAttribute('aria-expanded','false');
+        }
+      };
+      updateVisibility();
+      mqMobile.addEventListener('change', updateVisibility);
+  // Close drawer if leaving mobile layout
+  mqMobile.addEventListener('change', (e)=>{ if (!e.matches) { try{ drawer && drawer.classList.remove('open'); backdrop && backdrop.classList.remove('open'); hamburger && hamburger.setAttribute('aria-expanded','false'); }catch{} } });
+      const openDrawer = () => {
+        if (!drawer || !backdrop || !hamburger) return;
+  // Ensure elements are visible
+  try { drawer.hidden = false; backdrop.hidden = false; } catch{}
+        drawer.classList.add('open');
+        backdrop.classList.add('open');
+        hamburger.setAttribute('aria-expanded','true');
+      };
+      const closeDrawer = () => {
+        if (!drawer || !backdrop || !hamburger) return;
+        drawer.classList.remove('open');
+        backdrop.classList.remove('open');
+        hamburger.setAttribute('aria-expanded','false');
+      };
+      if (hamburger) hamburger.addEventListener('click', ()=>{
+        if (drawer && drawer.classList.contains('open')) closeDrawer(); else openDrawer();
+      });
+      if (backdrop) backdrop.addEventListener('click', closeDrawer);
+  // Close on Escape
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeDrawer(); });
+      if (drawer) drawer.addEventListener('click', (e)=>{
+        const a = e.target.closest('a');
+        if (a) closeDrawer();
+      });
+    } catch{}
+
+  // Index page: keep saw control in header on mobile; CSS handles placement next to title
+  // (No DOM moves needed.)
   });
 })();

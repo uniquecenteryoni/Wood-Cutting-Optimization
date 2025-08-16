@@ -33,6 +33,19 @@
       <a href="contact.html" class="nav-link">צור קשר</a>
     </div>
   </nav>
+  <!-- Mobile drawer trigger + container (hidden on desktop via CSS) -->
+  <button id="hamburger" class="hamburger" aria-label="menu" aria-controls="mobile-drawer" aria-expanded="false" hidden>
+    <span class="bars" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+  </button>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="mobile-drawer" class="mobile-drawer" hidden>
+    <nav aria-label="mobile">
+      <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+      <a href="plans.html" class="nav-link">תוכניות בנייה להורדה</a>
+      <a href="about.html" class="nav-link">אודות</a>
+      <a href="contact.html" class="nav-link">צור קשר</a>
+    </nav>
+  </aside>
 
   <main class="container">
     <!-- Block 1: Project Requirements -->
