@@ -6,9 +6,11 @@
   <title>תשלום</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
-    .checkout-wrap{max-width:880px;margin:16px auto;padding:0 12px}
-    .checkout-grid{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px}
+    .checkout-wrap{width:100%;margin:0;padding:0}
+    .checkout-grid{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;padding:24px 16px}
     @media(max-width:900px){.checkout-grid{grid-template-columns:1fr}}
+  /* Checkout sections: white background like the menu; no frames */
+  .checkout-grid .card{background:#fff;border:none;border-radius:0;box-shadow:none;padding:0}
     .summary .thumb{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#eee}
     .summary .thumb img{width:100%;height:100%;object-fit:cover;display:block}
     .price-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
@@ -20,13 +22,13 @@
 </head>
 <body>
   <header class="topbar">
-  <div class="top-left"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="לוגו" /></div>
+    <div class="top-left"><button id="btn-lang" class="btn">english</button></div>
+    <div class="top-center"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="לוגו" /></div>
     <div class="top-actions">
-      <button id="btn-lang" class="btn">english</button>
       <button id="btn-currency" class="btn">€</button>
       <button id="btn-units" class="btn">m</button>
     </div>
-    <h1 class="site-title">עבודת עץ</h1>
+    
   </header>
   <nav class="main-nav" aria-label="primary">
     <div class="nav-wrap">

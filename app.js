@@ -435,7 +435,9 @@ function renderInventoryTable() {
     const wrap = document.getElementById('db-table-wrap');
     if (!wrap) return;
     if (!inventoryRows || inventoryRows.length === 0) {
-        wrap.innerHTML = '<p>לא נטען קובץ.</p>';
+        // No data yet — show a friendly empty state
+        const msg = language === 'he' ? 'לא נטען קובץ.' : 'No file loaded.';
+        wrap.innerHTML = `<p style="color:#666;margin:8px 0;text-align:center">${msg}</p>`;
         return;
     }
     const headers = [...inventoryHeaders.map(h => translateHeaderName(h)), (language === 'he' ? 'פעולות' : 'Actions')];
@@ -563,6 +565,15 @@ function setInventoryFromArray2D(arr) {
     renderInventoryTable();
     refreshRequirementTypeOptions();
     showDbStatus(language === 'he' ? 'מאגר הנתונים נטען בהצלחה' : 'Inventory loaded successfully');
+    // Auto-open DB area after load to show the table
+    const area = document.getElementById('db-area');
+    const toggleDbBtn = document.getElementById('toggle-db');
+    if (area && toggleDbBtn) {
+        area.classList.remove('hidden');
+        area.setAttribute('aria-hidden','false');
+        toggleDbBtn.textContent = (language === 'he' ? 'הסתר מאגר עצים' : 'Hide Inventory');
+        toggleDbBtn.setAttribute('aria-expanded','true');
+    }
 }
 
 // שמירה ב-localStorage
@@ -1664,7 +1675,15 @@ if (btnUnits && !window.__siteGlobal) {
 }
 
 const addReqBtn = document.getElementById('add-req');
-if (addReqBtn) addReqBtn.addEventListener('click', () => addRequirementRow());
+if (addReqBtn) {
+    addReqBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.__addingReq) return;
+        window.__addingReq = true;
+        try { addRequirementRow(); } finally { setTimeout(()=>{ window.__addingReq = false; }, 0); }
+    }, { capture: true });
+}
 
 // תוצאה בסיסית: הדגמת חישוב 1D (מינימלי) ותצוגה
 function gatherRequirements() {
@@ -1713,34 +1732,47 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
         if (typeof lottie !== 'undefined' && lottieEl) {
             try {
                 // Prefer inline animation data if provided (avoid XHR on file://)
-                let inlineAnim = null;
-                try {
-                    const scriptEl = document.getElementById('loader-json');
-                    if (scriptEl && scriptEl.textContent) {
-                        inlineAnim = JSON.parse(scriptEl.textContent);
-                    }
-                } catch(e) { try { console.warn('Lottie: invalid JSON in #loader-json'); } catch(_){} }
-                const hasInline = (typeof window !== 'undefined' && !!window.LOADER_ANIM) || !!inlineAnim;
+                const inlineAnim = (typeof window !== 'undefined' && window.LOADER_ANIM) ? window.LOADER_ANIM : null;
+                const hasInline = !!inlineAnim;
                 if (location && location.protocol === 'file:' && !hasInline) {
-                    try { console.warn('Lottie: running from file:// may block loading.json via XHR. Use a local server or provide window.LOADER_ANIM inline.'); } catch(e){}
+                    try { console.warn('Lottie: running from file:// may block JSON via XHR. Use a local server or provide window.LOADER_ANIM inline.'); } catch(e){}
                 }
                 const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                anim = lottie.loadAnimation({
-                    container: lottieEl,
-                    renderer: 'svg',
-                    loop: prefersReduced ? false : true,
-                    autoplay: true,
-                    ...(hasInline ? { animationData: (window.LOADER_ANIM || inlineAnim) } : { path: 'loading.json' })
-                });
-                // Hide spinner only after the animation DOM is ready
-                anim.addEventListener('DOMLoaded', () => {
-                    if (spinner) spinner.style.display = 'none';
-                    if (lottieEl) lottieEl.style.display = '';
-                });
-                anim.addEventListener('data_failed', () => {
-                    if (spinner) spinner.style.display = '';
-                    try { console.warn('Lottie failed to load loading.json'); } catch(e){}
-                });
+                let triedAlt = false;
+
+                const startLottie = (source) => {
+                    if (!lottieEl) return;
+                    // Clean previous attempt
+                    if (anim) { try { anim.destroy(); } catch(e){} anim = null; }
+                    const cfg = {
+                        container: lottieEl,
+                        renderer: 'svg',
+                        loop: prefersReduced ? false : true,
+                        autoplay: true
+                    };
+                    const opts = (source === 'inline')
+                        ? { animationData: inlineAnim }
+                        : { path: source };
+                    anim = lottie.loadAnimation({ ...cfg, ...opts });
+                    anim.addEventListener('DOMLoaded', () => {
+                        if (spinner) spinner.style.display = 'none';
+                        if (lottieEl) lottieEl.style.display = '';
+                    });
+                    anim.addEventListener('data_failed', () => {
+                        // If Timberman failed and we haven't tried fallback, try loading.json next
+                        if (!triedAlt && source === 'Timberman.json') {
+                            triedAlt = true;
+                            if (spinner) spinner.style.display = '';
+                            startLottie('loading.json');
+                            return;
+                        }
+                        if (spinner) spinner.style.display = '';
+                        try { console.warn('Lottie failed to load animation from', source); } catch(e){}
+                    });
+                };
+
+                // Prefer inline; otherwise try Timberman.json first, then fallback to loading.json
+                startLottie(hasInline ? 'inline' : 'Timberman.json');
             } catch(e){ if (spinner) spinner.style.display = ''; }
         } else {
             if (spinner) spinner.style.display = '';
@@ -1770,14 +1802,28 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
 });
 
 const toggleDbBtn = document.getElementById('toggle-db');
-if (toggleDbBtn) toggleDbBtn.addEventListener('click', () => {
-    const area = document.getElementById('db-area');
-    if (!area) return;
-    area.classList.toggle('hidden');
-    toggleDbBtn.textContent = area.classList.contains('hidden')
-        ? translations[language].showDb
-        : (language === 'he' ? 'הסתר מאגר עצים' : 'Hide Inventory');
-});
+if (toggleDbBtn) {
+    // Accessibility wiring
+    toggleDbBtn.setAttribute('aria-controls', 'db-area');
+    toggleDbBtn.setAttribute('aria-expanded', 'false');
+    toggleDbBtn.addEventListener('click', () => {
+        const area = document.getElementById('db-area');
+        if (!area) return;
+    const nowHidden = area.classList.toggle('hidden');
+        // Update button label and ARIA
+        toggleDbBtn.textContent = nowHidden
+            ? translations[language].showDb
+            : (language === 'he' ? 'הסתר מאגר עצים' : 'Hide Inventory');
+        toggleDbBtn.setAttribute('aria-expanded', String(!nowHidden));
+        area.setAttribute('aria-hidden', String(nowHidden));
+        // When opening, ensure the table (or an empty-state message) is rendered
+        if (!nowHidden) {
+            // Always render to ensure fresh content
+            try { renderInventoryTable(); } catch(e){}
+            // Do not auto-scroll; keep user's scroll position stable
+        }
+    });
+}
 
 const addDbRowBtn = document.getElementById('add-db-row');
 if (addDbRowBtn) addDbRowBtn.addEventListener('click', () => {
@@ -1787,10 +1833,14 @@ if (addDbRowBtn) addDbRowBtn.addEventListener('click', () => {
 });
 
 const fileInput = document.getElementById('file-input');
-if (fileInput) fileInput.addEventListener('change', e => handleFile(e, data => {
+if (fileInput) {
+        // Ensure selecting the same file twice still triggers change
+        fileInput.addEventListener('click', () => { try { fileInput.value = ''; } catch(_){} });
+        fileInput.addEventListener('change', e => handleFile(e, data => {
     console.log('Loaded rows:', Array.isArray(data) ? data.length : 0);
     setInventoryFromArray2D(data);
-}));
+    }));
+}
 
 const exportBtn = document.getElementById('export-pdf');
 if (exportBtn) exportBtn.addEventListener('click', () => {

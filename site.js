@@ -77,6 +77,99 @@
   try { applyDir(); } catch {}
 
   window.addEventListener('DOMContentLoaded', ()=>{
+    // Defensive: remove any stray JSON printed after the footer (e.g., if a JSON script was mis-parsed)
+    try {
+      const footer = document.querySelector('footer.footer');
+      if (footer) {
+        let n = footer.nextSibling;
+        while (n) {
+          const next = n.nextSibling;
+          if (n.nodeType === 3) { // text node
+            const t = String(n.textContent||'').trim();
+            if (t && (t.startsWith('{"v"') || t.includes('"layers"') || t.includes('"assets"'))) {
+              n.parentNode && n.parentNode.removeChild(n);
+            }
+          } else if (n.nodeType === 1) { // element
+            const el = n;
+            const tag = (el.tagName||'').toLowerCase();
+            const typ = (el.getAttribute && el.getAttribute('type')) || '';
+            if (el.id === 'loader-json' || (tag === 'script' && /application\/json/i.test(typ))) {
+              el.parentNode && el.parentNode.removeChild(el);
+            }
+          }
+          n = next;
+        }
+      }
+    } catch {}
+    // Enter initial compact mode to ensure the first three blocks (up to the summarize button) fit without scrolling.
+    // We'll remove this mode after the first actionable click.
+    try {
+      const key='initialCompactDone';
+    const path = (location.pathname || '').toLowerCase();
+    const isIndex = path.endsWith('/index.html') || path.endsWith('index.html') || /\/$/.test(path);
+      if (isIndex && !sessionStorage.getItem(key)) {
+        document.body.classList.add('initial-compact');
+        // If viewport height is very small, add an extra-tight mode
+        try {
+          if (window.innerHeight < 640) document.body.classList.add('initial-compact-tight');
+        } catch{}
+        const mainEl = document.querySelector('main.container');
+        let scaled = false;
+        const fitToSummarize = () => {
+          try {
+            const btn = document.getElementById('export-pdf');
+            if (!btn || !mainEl) return;
+            // Measure where the button bottom lands in the viewport
+            const rect = btn.getBoundingClientRect();
+            const bottom = rect.bottom; // relative to viewport top
+            const viewport = window.innerHeight || document.documentElement.clientHeight;
+            const margin = 8; // small breathing room
+            if (bottom + margin <= viewport) {
+              if (scaled) { mainEl.style.transform=''; mainEl.style.transformOrigin=''; scaled=false; }
+              return;
+            }
+            // Compute a scale factor to fit the button into viewport
+            const scale = Math.max(0.4, Math.min(1, (viewport - margin) / (bottom)));
+            mainEl.style.transform = `scale(${scale.toFixed(3)})`;
+            mainEl.style.transformOrigin = 'top center';
+            scaled = true;
+          } catch {}
+        };
+        // Run after layout settles
+        requestAnimationFrame(()=>{ setTimeout(fitToSummarize, 0); });
+        const off = () => {
+          document.body.classList.remove('initial-compact');
+          document.body.classList.remove('initial-compact-tight');
+          if (scaled && mainEl) { mainEl.style.transform=''; mainEl.style.transformOrigin=''; scaled=false; }
+          sessionStorage.setItem(key, '1');
+          window.removeEventListener('click', onAnyClick, true);
+          window.removeEventListener('resize', onResize);
+          window.removeEventListener('orientationchange', onResize);
+          window.removeEventListener('resize', onResizeFit);
+          window.removeEventListener('orientationchange', onResizeFit);
+        };
+        const onAnyClick = (e) => {
+          const t = e.target;
+          if (!t) return off();
+          const tag = (t.tagName||'').toLowerCase();
+          const isBtnLike = tag === 'button' || tag === 'input' || t.closest('button,.btn,input,select');
+          if (isBtnLike) off();
+        };
+        window.addEventListener('click', onAnyClick, true);
+        // If orientation/resize increases room, relax tight mode
+        const onResize = () => {
+          try {
+            if (window.innerHeight >= 640) document.body.classList.remove('initial-compact-tight');
+          } catch{}
+        };
+        window.addEventListener('resize', onResize, { passive: true });
+        window.addEventListener('orientationchange', onResize);
+        // Keep fitting while in compact mode (e.g., when virtual keyboard or orientation changes)
+        const onResizeFit = () => { fitToSummarize(); };
+        window.addEventListener('resize', onResizeFit, { passive: true });
+        window.addEventListener('orientationchange', onResizeFit);
+      }
+    } catch{}
     applyDir();
     updateButtons();
     // Localize nav and page titles

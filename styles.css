@@ -1,20 +1,40 @@
 :root{--bg:#f6f3ef;--card:#fff;--muted:#5b5b5b;--accent:#b57b6d;--primary:#6a8f6b;--head1:#f0eadf;--head2:#e6efe6;--border:#e7e2da}
-/* Headings font: Rubik */
+/* Headings font: Rubik (EN) + Noto Sans Hebrew Variable (HE) */
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');
+@font-face{
+	font-family:'Noto Sans Hebrew Variable';
+	src:url('fonts/NotoSansHebrew-VariableFont_wdth,wght.ttf') format('truetype');
+	font-weight:100 900;
+	font-style:normal;
+	font-display:swap;
+}
+@font-face{
+	font-family:'Josefin Sans Variable';
+	src:url('fonts/JosefinSans-VariableFont_wght.ttf') format('truetype');
+	font-weight:100 700;
+	font-style:normal;
+	font-display:swap;
+}
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#1e1e1e;margin:0;padding:0;background:var(--bg)}
 /* Better mobile tap behavior */
 body{-webkit-tap-highlight-color: transparent}
 h1,h2,h3{font-family:'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial}
-h2{font-size:22px}
+/* Headings bold in both languages */
+html[dir="rtl"] h1, html[dir="rtl"] h2, html[dir="rtl"] h3{font-family:'Noto Sans Hebrew Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:700}
+html[dir="ltr"] h1, html[dir="ltr"] h2, html[dir="ltr"] h3{font-family:'Josefin Sans Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:700}
+h2{font-size:28px}
 h3{font-size:18px}
 html[dir="rtl"] body{ text-align:right }
+html[dir="rtl"] body{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
+html[dir="ltr"] body{font-family:'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
 html[dir="ltr"] body{ text-align:left }
 html[dir="rtl"] .container, html[dir="rtl"] .card{ text-align:right }
 html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
-.topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative}
+.topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative;min-height:128px}
 .site-title{margin:0 auto;text-align:center;font-size:28px;background:transparent;padding:6px 12px;border-radius:10px;display:inline-block}
-.top-left{position:absolute;left:14px;top:6px;bottom:6px;display:flex;align-items:center}
+.top-left{position:absolute;left:14px;top:0;bottom:auto;display:flex;align-items:center;margin-top:6px}
+.top-center{position:absolute;left:50%;top:6px;bottom:6px;transform:translateX(-50%);display:flex;align-items:center}
 .site-logo{height:100%;width:auto;display:block;border:none;border-radius:0;background:transparent}
 .top-actions{display:flex;gap:10px;position:absolute;top:10px;right:14px}
 .top-actions .btn{min-height:40px}
@@ -26,15 +46,25 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .nav-link{display:inline-block;padding:8px 12px;border-radius:999px;text-decoration:none;color:#2b2b2b;white-space:nowrap;transition:background .2s ease,color .2s ease}
 .nav-link:hover{background:var(--head2)}
 .nav-link.active{background:var(--primary);color:#fff}
-.container{max-width:1200px;margin:16px auto;padding:0 12px;display:grid;grid-template-columns:1fr;gap:16px}
+.container{max-width:none;width:100%;margin:0;padding:0;display:grid;grid-template-columns:1fr;gap:0}
 .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.04);border:1px solid var(--border)}
-.card-head{display:flex;justify-content:space-between;align-items:center}
+/* Full-bleed page sections: only top-level cards under .container become flat bands */
+.container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:56px 16px}
+.container > .card + .card{border-top:1px solid var(--border)}
+.card-head{display:flex;justify-content:space-between;align-items:center;position:relative;gap:8px}
+.card-head h2{margin:0 auto}
+.card-head .req-name{position:absolute;right:0;left:auto;top:0;display:flex;align-items:flex-start}
+html[dir="rtl"] .card-head .req-name{right:0;left:auto}
+.card-head .req-saw{position:absolute;left:0;right:auto;top:0;display:flex;align-items:flex-start}
+html[dir="rtl"] .card-head .req-saw{left:0;right:auto}
 .card-head + *{margin-top:12px}
 .small-controls{display:flex;gap:8px;align-items:center}
 .small-controls #saw-thickness{width:64px}
 /* Align project name and saw thickness controls */
 .small-controls input[type="text"],
-.small-controls input[type="number"]{
+.small-controls input[type="number"],
+#project-name,
+#saw-thickness{
 	padding:8px 10px;
 	border:1px solid var(--border);
 	border-radius:8px;
@@ -42,11 +72,17 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 	height:34px;
 	background:#fff;
 }
-.small-controls #project-name{min-width:180px; width:clamp(180px, 28vw, 260px)}
+.small-controls #project-name{min-width:180px; width:clamp(220px, 32vw, 320px)}
+.small-controls #saw-thickness{width:28px}
+#saw-thickness{width:102px; text-align:center}
+.chip#saw-unit{height:34px;display:inline-flex;align-items:center;padding:0 8px}
 .small-controls .inline{gap:8px}
 .small-controls label.inline{gap:8px; align-items:center}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .btn{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;color:#2b2b2b;font-size:14px;line-height:1.2;transition:background .15s ease, box-shadow .15s ease, transform .05s ease}
+.btn{font-weight:100}
+html[dir="rtl"] .btn{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
+html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
 .btn:hover{background:#faf8f4;box-shadow:0 2px 6px rgba(0,0,0,.06);transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
 .btn.icon-btn{padding:6px 10px;line-height:1}
@@ -77,6 +113,7 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .req-row .btn-remove:focus{outline:none;box-shadow:0 0 0 3px rgba(211,47,47,.25)}
 .db-table{width:100%;border-collapse:collapse}
 .db-table th,.db-table td{padding:8px;border:1px solid var(--border);text-align:center;font:inherit}
+.db-table thead th{font-size:16px}
 .db-table tbody tr{transition:background-color .12s ease}
 .db-table tbody tr:hover{background:#f5faf5}
 /* New-row classification select styling */
@@ -97,11 +134,15 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .db-table thead tr:first-child th{background:var(--head1)}
 .db-table thead tr:nth-child(2) th{background:var(--head2)}
 .db-area{overflow:auto;max-height:60vh;padding-top:6px}
+.db-area #db-table-wrap:empty{display:block;min-height:0;padding:0;border:none}
 .db-table thead tr:first-child th{position:sticky;top:0;z-index:2}
 .db-table thead tr:nth-child(2) th{position:sticky;top:34px;z-index:1}
 .actions{margin-top:12px;display:flex;gap:8px}
 .actions-center{justify-content:center}
-.footer{padding:12px;text-align:center;color:var(--muted)}
+.actions-center .btn{font-size:17px;padding:10px 15px}
+.db-head{margin-top:32px}
+#block-req .actions.actions-center{margin-top:32px}
+.footer{padding:8px;text-align:center;color:var(--muted);font-size:12px}
 .file-btn input{display:none}
 .file-btn{display:inline-flex;align-items:center;gap:8px}
 .file-btn span{font:inherit}
@@ -163,6 +204,78 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 @media(min-width:900px){.container{grid-template-columns:1fr}}
 @media(max-width:600px){.topbar h1{font-size:16px}.btn{padding:6px 8px}.container{grid-template-columns:1fr}}
 
+/* Calculator header (requirements block) — center controls and enlarge heading */
+#block-req .card-head{flex-direction:column;align-items:center;gap:8px}
+#block-req .card-head h2{font-size:36px}
+#block-req .card-head h2{margin-top:44px}
+#block-req{padding-top:12px}
+#block-req .actions.actions-center{justify-content:center}
+#block-req .small-controls{justify-content:flex-start;flex-wrap:wrap}
+#block-req .small-controls .inline{justify-content:flex-start}
+#block-db .card-head h2, #block-res h2{font-size:36px}
+/* Normalize Block 3 title spacing and alignment */
+#block-res h2{margin:0 auto}
+#block-res h2 + #results-area{margin-top:12px}
+/* Force small-controls to the physical left in RTL */
+html[dir="rtl"] #block-req .small-controls{justify-content:flex-end}
+/* Increase key button sizes by ~25% */
+#add-req.btn, #calc-opt.btn, #toggle-db.btn, .btn.file-btn{font-size:17px;padding:10px 15px}
+#block-req .small-controls label span{font-size:16px;font-weight:500}
+/* Extra spacing under Block 1 title: match Block 2 when list is empty */
+#requirements-list:empty{display:none;margin-top:0}
+#block-req .actions.actions-center{margin-top:24px}
+.db-head{margin-top:36px}
+/* Center and space requirements list */
+#requirements-list{display:flex;flex-direction:column;gap:8px;align-items:center;margin-top:16px}
+#requirements-list .req-row{justify-content:center}
+
+/* Block 1: top-right project name and bottom-left saw thickness */
+.req-name{display:flex;justify-content:flex-end}
+html[dir="rtl"] .req-name{justify-content:flex-start}
+.req-saw{display:flex;justify-content:flex-start;margin-top:0}
+html[dir="rtl"] .req-saw{justify-content:flex-end}
+
+/* Block 2: pin status to bottom-left */
+#block-db{position:relative;padding-bottom:64px}
+#block-db .card-head{justify-content:center}
+#block-db .db-head{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+#block-db .db-right{display:flex;align-items:center;gap:8px;justify-content:center}
+#block-db .db-status{position:absolute;left:16px;bottom:16px;min-height:18px;color:#2e7d32;margin:0;text-align:left}
+#block-db .db-status:empty{display:none}
+html[dir="rtl"] #block-db .db-status{left:16px;right:auto;text-align:left}
+/* Ensure spacing below DB title to its button row */
+#block-db .db-head{margin-top:24px}
+
+/* Block 3: make export PDF button larger and add extra spacing */
+#block-res .actions.actions-center{margin-top:18px}
+#export-pdf.btn{font-size:17px;padding:10px 15px;margin-top:8px}
+
+/* Initial compact view (first load): ensure blocks up to the Summarize button fit without scrolling */
+body.initial-compact{overflow-y:auto}
+body.initial-compact .topbar{min-height:96px;padding:6px 12px}
+body.initial-compact .main-nav .nav-wrap{padding:6px 10px}
+body.initial-compact .container > .card{padding:24px 12px}
+body.initial-compact .card-head + *{margin-top:8px}
+body.initial-compact #block-req .actions.actions-center{margin-top:16px}
+body.initial-compact .db-head{margin-top:12px}
+body.initial-compact #requirements-list{margin-top:8px}
+body.initial-compact #block-db{padding-bottom:16px}
+body.initial-compact #block-db .db-status{display:none}
+body.initial-compact #results-area p{display:none}
+body.initial-compact #block-res .actions.actions-center{margin-top:8px}
+body.initial-compact .footer{display:none}
+
+/* Ultra-tight fallback if viewport is extremely short */
+body.initial-compact-tight .topbar{min-height:72px;padding:4px 10px}
+body.initial-compact-tight .main-nav .nav-wrap{padding:4px 8px}
+body.initial-compact-tight .container > .card{padding:16px 10px}
+body.initial-compact-tight .card-head + *{margin-top:6px}
+body.initial-compact-tight #block-req .actions.actions-center{margin-top:10px}
+body.initial-compact-tight .db-head{margin-top:8px}
+body.initial-compact-tight #requirements-list{margin-top:6px}
+body.initial-compact-tight #block-res .actions.actions-center{margin-top:6px}
+body.initial-compact-tight h2{font-size:28px}
+
 /* Forms */
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .form-field{display:flex;flex-direction:column;gap:6px}
@@ -171,5 +284,6 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .form-field input,.form-field textarea{padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#fff}
 .form-field input:focus,.form-field textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(106,143,107,.15)}
 .form-actions{display:flex;gap:8px;justify-content:flex-start}
+.form-actions .btn{font-weight:100}
 .form-status{margin-top:8px;color:var(--muted)}
 @media(max-width:700px){.form-grid{grid-template-columns:1fr}}
