@@ -76,6 +76,20 @@ const translations = {
     }
 };
 
+// עזר: מיקום גלילה אופקית לנקודת ההתחלה (ימין ב-RTL, שמאל ב-LTR) בצורה יציבה בין דפדפנים
+function scrollToStart(el, dir){
+    try{
+        if (!el) return;
+        if (dir === 'rtl'){
+            el.scrollLeft = el.scrollWidth; // FF
+            if (Math.abs(el.scrollLeft) < 2) el.scrollLeft = 1e9; // WebKit strange mode
+            if (Math.abs(el.scrollLeft) < 2) el.scrollLeft = -1e9; // Chrome-like RTL mode
+        } else {
+            el.scrollLeft = 0;
+        }
+    }catch(_){}
+}
+
 // פונקציות מעבר שפה
 function switchLanguage(lang) {
     language = lang;
@@ -523,14 +537,15 @@ function renderInventoryTable() {
         const trClass = editingRows.has(rowIndex) ? ' class="editing"' : '';
         return `<tr${trClass}>${tds}<td class="actions-cell">${actions}</td></tr>`;
     }).join('');
-    wrap.innerHTML = `
-      <table class="db-table">
+        const tableDir = (document.documentElement && document.documentElement.dir === 'rtl') ? 'rtl' : 'ltr';
+        wrap.innerHTML = `
+          <table class="db-table" dir="${tableDir}">
         <thead>${thead1}${thead2}</thead>
         <tbody>${tbody}</tbody>
       </table>
     `;
-    // Reset scroll to the start to avoid RTL initial offset on mobile
-    try { wrap.scrollLeft = 0; } catch(_) {}
+        // Reset scroll to the logical start (right in RTL, left in LTR)
+        scrollToStart(wrap, tableDir);
 }
 
 // עדכון כל רשימות הסוגים בדרישות
@@ -1221,7 +1236,7 @@ function renderResults(results) {
 
     // בניית HTML פשוט לטבלה
     function buildHtmlTable(headers, rows) {
-        return `<table class="db-table"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    return `<table class="db-table" dir="ltr"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
 
     // דיאגרמות
@@ -1856,6 +1871,8 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
             const resTitle = document.querySelector('#block-res h2');
             resTitle && resTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch {}
+    // Reset horizontal scroll positions inside results
+    try { document.querySelectorAll('#results-area .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch{}
     }, remaining);
 });
 
@@ -1878,8 +1895,12 @@ if (toggleDbBtn) {
         if (!nowHidden) {
             // Always render to ensure fresh content
             try { renderInventoryTable(); } catch(e){}
-            // Reset scroll position to start on open
-            try { document.querySelectorAll('#db-table-wrap, #db-table-wrap .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch(_) {}
+            // Reset horizontal scroll to logical start on open (right in RTL, left in LTR)
+            try {
+                const dir = (document.documentElement && document.documentElement.dir === 'rtl') ? 'rtl' : 'ltr';
+                const wrap = document.getElementById('db-table-wrap');
+                if (wrap) scrollToStart(wrap, dir);
+            } catch(_) {}
             // Do not auto-scroll; keep user's scroll position stable
         }
     });
@@ -2466,7 +2487,11 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
         renderInventoryTable();
         refreshRequirementTypeOptions();
         showDbStatus(language === 'he' ? 'מאגר הנתונים נטען מהדפדפן' : 'Inventory restored from browser');
-    try { document.querySelectorAll('#db-table-wrap, #db-table-wrap .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch(_) {}
+    try {
+        const dir = (document.documentElement && document.documentElement.dir === 'rtl') ? 'rtl' : 'ltr';
+        const wrap = document.getElementById('db-table-wrap');
+        if (wrap) scrollToStart(wrap, dir);
+    } catch(_) {}
     }
 })();
 });

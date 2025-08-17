@@ -131,7 +131,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 	#requirements-list .req-row > *:nth-child(6){grid-column:2/3; justify-self:end}
 }
 .db-table{width:max-content; min-width:100%; border-collapse:collapse; table-layout:auto}
-.db-table{direction:ltr}
+/* Tables inherit page direction; inventory uses dir attribute at runtime */
 .db-table th,.db-table td{padding:8px;border:1px solid var(--border);text-align:center;font:inherit; white-space:nowrap}
 .db-table thead th{font-size:16px}
 .db-table tbody tr{transition:background-color .12s ease}
@@ -170,7 +170,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .db-table tr.new-row td[contenteditable]:empty::before{ content:attr(data-ph); color:#9aa39a }
 .db-table thead tr:first-child th{background:var(--head1)}
 .db-table thead tr:nth-child(2) th{background:var(--head2)}
-.db-area{overflow-y:auto; overflow-x:hidden; max-height:60vh;padding-top:6px}
+.db-area{overflow-y:auto; overflow-x:hidden; max-height:60vh;padding-top:6px; scrollbar-gutter: stable both-edges}
 .db-area #db-table-wrap:empty{display:block;min-height:0;padding:0;border:none}
 .db-table thead tr:first-child th{position:sticky;top:0;z-index:2}
 .db-table thead tr:nth-child(2) th{position:sticky;top:34px;z-index:1}
@@ -274,6 +274,8 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .results-section > h3{margin:0 auto; text-align:center}
 .results-section > .x-scroll{margin:0;}
 #block-res h2 + #results-area{margin-top:12px}
+#results-area{max-width:100%; overflow:visible}
+.no-results{margin:0 auto; text-align:center; display:block; padding:8px 12px}
 /* Force small-controls to the physical left in RTL */
 html[dir="rtl"] #block-req .small-controls{justify-content:flex-end}
 /* Increase key button sizes by ~25% */
@@ -319,7 +321,7 @@ html[dir="rtl"] #block-db .db-status{left:16px;right:auto;text-align:left}
 #block-res .res-modal-actions{display:flex;justify-content:center;margin-top:10px}
 
 /* אזורי גלילה אופקית מבודדים (טבלאות/דיאגרמות בתוצאות) */
-.x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scrollbar-gutter: stable both-edges}
+.x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scrollbar-gutter: stable both-edges; scroll-behavior:auto; direction:ltr}
 .x-scroll{overflow-anchor: none}
 
 /* Add wood button pastel red style */
@@ -378,7 +380,10 @@ body.initial-compact-tight h2{font-size:28px}
 
 /* Mobile enhancements: safer text scaling, fluid diagrams, table scroll, and narrow stacking */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-.no-x-scroll, html, body{max-width:100%; overflow-x:hidden}
+.no-x-scroll, html, body{max-width:100vw; width:100%; overflow-x:hidden}
+@supports (padding: max(0px)){
+	body{ width:100vw; }
+}
 .x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x}
 .diagram svg{max-width:100%;height:auto;display:block}
 @media(max-width:640px){
@@ -391,9 +396,13 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 
 /* Make main blocks edge-to-edge on mobile (no side gutters under the header) */
 @media(max-width:900px){
+	.container{ padding-left:0; padding-right:0 }
 	.container > .card{ padding-left:0; padding-right:0 }
 }
-.db-area{overflow:auto}
+/* Keep DB area from creating horizontal page scroll; only inner #db-table-wrap may scroll X */
+.db-area{overflow-y:auto; overflow-x:hidden}
+/* Guard the whole DB block from leaking horizontal overflow */
+#block-db{overflow-x:hidden}
 @media(max-width:520px){
 	#requirements-list .req-row{grid-template-columns:1fr}
 	#requirements-list .req-row > *{grid-column:1/-1 !important; justify-self:stretch}
