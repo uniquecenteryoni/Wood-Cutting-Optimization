@@ -90,6 +90,32 @@ function scrollToStart(el, dir){
     }catch(_){}
 }
 
+// יצירת כותרות ויחידות ברירת מחדל למאגר (גם ללא קובץ טעון)
+function ensureInventorySeeded() {
+    if (Array.isArray(inventoryRows) && inventoryRows.length > 0) return;
+    const he = (language === 'he');
+    // כותרות ברירת מחדל
+    const hdr = he ? ['סוג','סיווג','עובי','רוחב','אורך','מחיר','מחיר למטר','ספק']
+                   : ['Type','Classification','Thickness','Width','Length','Price','Price per meter','Supplier'];
+    // יחידות ברירת מחדל: עובי/רוחב ב־mm, אורך ב־m, מחירים — מטבע נוכחי
+    const sym = document.getElementById('btn-currency')?.textContent?.trim() || normalizeCurrencySymbol(inventoryPriceCurrencyUnit) || '€';
+    const units = he
+        ? ['', '', 'מ״מ', 'מ״מ', 'מ׳', sym, sym, '']
+        : ['', '', 'mm',  'mm',  'm',  sym, sym, ''];
+    inventoryRows = [hdr, units];
+    inventoryHeaders = hdr.slice();
+    inventoryUnits = units.slice();
+    inventoryData = [];
+    inventoryPriceCurrencyUnit = sym;
+    saveData('inventoryRows', inventoryRows);
+    saveData('inventoryHeaders', inventoryHeaders);
+    saveData('inventoryUnits', inventoryUnits);
+    saveData('inventoryData', inventoryData);
+    saveData('inventoryPriceCurrencyUnit', inventoryPriceCurrencyUnit);
+    saveData('inventorySource', 'file');
+    saveData('inventorySource', 'manual');
+}
+
 // פונקציות מעבר שפה
 function switchLanguage(lang) {
     language = lang;
@@ -279,10 +305,11 @@ function getClassificationFor(type, thickness) {
 function normalizeUnitLabel(u) {
     const s = String(u || '').toLowerCase();
     // זיהוי עברית: מ"מ / מילימטר / מילימטרים ; ס"מ / סנטימטר
-    if (s.includes("mm") || s.includes("מ\"מ") || s.includes('מילימ')) return 'mm';
-    if (s.includes("cm") || s.includes("ס\"מ") || s.includes('סנטימ')) return 'cm';
-    if (s.includes("m") || s.includes("מ'")) return 'm';
-    if (s.includes("inch") || s.includes('in') || s.includes('"')) return 'in';
+    // תמיכה גם בגרש (׳) וגרשיים (״) בעברית
+    if (s.includes("mm") || s.includes("מ\"מ") || s.includes("מ״מ") || s.includes('מילימ')) return 'mm';
+    if (s.includes("cm") || s.includes("ס\"מ") || s.includes("ס״מ") || s.includes('סנטימ')) return 'cm';
+    if (s.includes("m") || s.includes("מ'") || s.includes("מ׳") || s.includes("מטר")) return 'm';
+    if (s.includes("inch") || s.includes('in') || s.includes('"') || s.includes('אינץ') || s.includes('אינצ׳')) return 'in';
     return '';
 }
 
@@ -458,7 +485,55 @@ function renderInventoryTable() {
         return;
     }
     const headers = [...inventoryHeaders.map(h => translateHeaderName(h)), (language === 'he' ? 'פעולות' : 'Actions')];
-    const units = inventoryUnits;
+    // תיקון יחידות חסרות — הוסף ברירת מחדל להצגה ולשימור
+    const heLang = (language === 'he');
+    const unitsOrig = Array.isArray(inventoryUnits) ? inventoryUnits : [];
+    const units = unitsOrig.slice();
+    const thIdxFix = getThicknessColIndex();
+    const wIdxFix = getWidthColIndex();
+    const lenIdxFix = getLengthColIndex();
+    const priceIdxFix = getPriceColIndex();
+    const ppmIdxFix = getPricePerMeterColIndex();
+    const curSym = document.getElementById('btn-currency')?.textContent?.trim() || inventoryPriceCurrencyUnit || '€';
+    if (thIdxFix >= 0 && (!units[thIdxFix] || String(units[thIdxFix]).trim()==='')) units[thIdxFix] = heLang ? 'מ״מ' : 'mm';
+    if (wIdxFix  >= 0 && (!units[wIdxFix]  || String(units[wIdxFix]).trim()===''))  units[wIdxFix]  = heLang ? 'מ״מ' : 'mm';
+    // אם המקור הוא manual — ודא שהיחידה באורך היא מטרים גם אם הוזן אחר כך אחרת
+    const invSource = loadData('inventorySource');
+    if (lenIdxFix>= 0 && (invSource === 'manual')) units[lenIdxFix] = heLang ? 'מ׳' : 'm';
+    if (lenIdxFix>= 0 && (!units[lenIdxFix]|| String(units[lenIdxFix]).trim()==='')) units[lenIdxFix] = heLang ? 'מ׳'  : 'm';
+    if (priceIdxFix>=0 && (!units[priceIdxFix]|| String(units[priceIdxFix]).trim()==='')) units[priceIdxFix] = curSym;
+    if (ppmIdxFix  >=0 && (!units[ppmIdxFix]  || String(units[ppmIdxFix]).trim()===''))  units[ppmIdxFix]  = curSym;
+    // נרמול אורך למטרים עבור כל מקור: אם היחידה איננה מטר, המר את הנתונים ושנה את התווית למטר
+    if (lenIdxFix >= 0) {
+        const lenUnitNow = units[lenIdxFix] || '';
+        const norm = normalizeUnitLabel(lenUnitNow);
+        if (norm && norm !== 'm') {
+            let changed = false;
+            inventoryData = (inventoryData || []).map(row => {
+                const v = row?.[lenIdxFix];
+                const mm = toMM(v, lenUnitNow);
+                if (isFinite(mm)) {
+                    const meters = fromMM(mm, 'm');
+                    const num = Number(meters);
+                    if (isFinite(num)) {
+                        const val = +num.toFixed(3);
+                        if (row[lenIdxFix] !== val) changed = true;
+                        row[lenIdxFix] = val;
+                    }
+                }
+                return row;
+            });
+            units[lenIdxFix] = heLang ? 'מ׳' : 'm';
+            inventoryUnits = units.slice();
+            saveData('inventoryUnits', inventoryUnits);
+            if (changed) saveData('inventoryData', inventoryData);
+        }
+    }
+    // אם בוצע שינוי — שמור את היחידות המעודכנות
+    if (units.length && (units.length !== unitsOrig.length || units.some((u,i)=>u !== unitsOrig[i]))) {
+        inventoryUnits = units.slice();
+        saveData('inventoryUnits', inventoryUnits);
+    }
     const body = inventoryData;
     const displayUnits = units && units.length ? units.map((u, i) => {
         // עדכן מטבע בעמודת המחיר לפי הכפתור
@@ -471,6 +546,10 @@ function renderInventoryTable() {
         if (i === priceIdx || i === ppmIdx) {
             // דאג שבראש היחידות יוצג המטבע גם בעמודות מחיר
             return document.getElementById('btn-currency')?.textContent?.trim() || normalizeCurrencySymbol(u) || '';
+        }
+        // במאגר ידני — שמור על אורך במטרים גם אם הממשק באימפריאלי
+        if (i === lenIdxFix && invSource === 'manual') {
+            return heLang ? 'מ׳' : 'm';
         }
         return convertedUnitLabelLocalized(u, unitSystem, language);
     }) : [];
@@ -1901,6 +1980,8 @@ if (toggleDbBtn) {
         area.setAttribute('aria-hidden', String(nowHidden));
         // When opening, ensure the table (or an empty-state message) is rendered
         if (!nowHidden) {
+            // אם אין קובץ טעון — זריעת טבלה ריקה עם יחידות ברירת מחדל
+            try { ensureInventorySeeded(); } catch(_){ }
             // Always render to ensure fresh content
             try { renderInventoryTable(); } catch(e){}
             // Reset horizontal scroll to logical start on open (right in RTL, left in LTR)
@@ -1931,29 +2012,8 @@ if (addDbRowBtn) addDbRowBtn.addEventListener('click', () => {
             toggleDbBtn.setAttribute('aria-expanded','true');
         }
     }
-    // Behavior:
-    // 1) If no inventory loaded yet, create minimal headers/units to allow an empty row entry.
-    // 2) If inventory exists, just show a new editable row at the top for quick entry.
-    if (!inventoryRows || inventoryRows.length === 0) {
-        // Seed with default headers/units for a clean empty table
-        const he = (language === 'he');
-        const hdr = he ? ['סוג','סיווג','עובי','רוחב','אורך','מחיר','מחיר למטר','ספק']
-                       : ['Type','Classification','Thickness','Width','Length','Price','Price per meter','Supplier'];
-        const units = he ? ['', '', 'מ״מ', 'מ״מ', 'ס״מ', '€', `${he?'€':''}`, '']
-                         : ['', '', 'mm', 'mm', 'cm', '€', '€', ''];
-        inventoryRows = [hdr, units];
-        inventoryHeaders = hdr.slice();
-        inventoryUnits = units.slice();
-        inventoryData = [];
-        saveData('inventoryRows', inventoryRows);
-        saveData('inventoryHeaders', inventoryHeaders);
-        saveData('inventoryUnits', inventoryUnits);
-        saveData('inventoryData', inventoryData);
-        // Ensure currency unit reflects the button
-        const sym = document.getElementById('btn-currency')?.textContent?.trim() || '€';
-        inventoryPriceCurrencyUnit = sym;
-        saveData('inventoryPriceCurrencyUnit', inventoryPriceCurrencyUnit);
-    }
+    // אם אין מאגר — זרע כותרות ויחידות ברירת מחדל כדי לאפשר הזנה ידנית
+    ensureInventorySeeded();
     // Show a new editable row at the top
     showNewInventoryRow = true;
     renderInventoryTable();
@@ -2504,6 +2564,11 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
         renderInventoryTable();
         refreshRequirementTypeOptions();
         showDbStatus(language === 'he' ? 'מאגר הנתונים נטען מהדפדפן' : 'Inventory restored from browser');
+        // השלם יחידות חסרות מגרסאות ישנות
+        if (!Array.isArray(inventoryUnits) || inventoryUnits.length !== inventoryHeaders.length) {
+            ensureInventorySeeded();
+            renderInventoryTable();
+        }
     try {
         const dir = (document.documentElement && document.documentElement.dir === 'rtl') ? 'rtl' : 'ltr';
         const wrap = document.getElementById('db-table-wrap');
