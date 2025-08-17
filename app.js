@@ -1437,6 +1437,7 @@ function renderResults(results) {
         // ציור פרופורציונלי לפלטה ולחלקים שעליה
     const viewW = 1000, viewH = 600;
     const svgId = `svg_${svgIdCounter++}`;
+    const showLabels = !!displaySettings.showPieceLabels;
         let PW = p.plateWmm || toMM(p.width, inventoryUnits[getWidthColIndex()]||'');
         let PH = p.plateHmm || toMM(p.length, inventoryUnits[getLengthColIndex()]||'');
         // וודא שהצלע הארוכה לרוחב
