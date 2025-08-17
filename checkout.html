@@ -38,16 +38,28 @@
       <a href="contact.html" class="nav-link">צור קשר</a>
     </div>
   </nav>
+  <button id="hamburger" class="hamburger" aria-label="menu" aria-controls="mobile-drawer" aria-expanded="false" hidden>
+    <span class="bars" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+  </button>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="mobile-drawer" class="mobile-drawer" hidden>
+    <nav aria-label="mobile">
+      <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+      <a href="plans.html" class="nav-link">תוכניות בנייה להורדה</a>
+      <a href="about.html" class="nav-link">אודות</a>
+      <a href="contact.html" class="nav-link">צור קשר</a>
+    </nav>
+  </aside>
 
   <main class="checkout-wrap">
     <div class="checkout-grid">
       <section class="card summary">
-        <div class="card-head"><h2 id="sum-title">סיכום הזמנה</h2><span class="badge">Demo</span></div>
+        <div class="card-head"><h2 id="sum-title" style="margin-bottom:12px">סיכום הזמנה</h2><span class="badge">Demo</span></div>
         <div id="sum-body"></div>
       </section>
       <section class="card pay-form">
         <div class="card-head"><h2 id="pay-title">פרטי תשלום</h2></div>
-        <form id="checkout-form">
+        <form id="checkout-form" style="padding:12px 14px">
           <div class="form-grid">
             <div class="form-field">
               <label id="name-label">שם מלא</label>

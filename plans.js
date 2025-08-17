@@ -67,14 +67,32 @@ function planCard(p) {
   const imgs = [];
   const primary = p.img || '';
   const secondary = p.img2 || deriveSecondImage(primary);
-  if (primary) imgs.push(primary);
-  if (secondary) imgs.push(secondary);
-  const imgHTML = imgs.length
-    ? `<div class="thumb" aria-label="${p.title[lang]}">`+
-        `<img class="thumb-img primary" src="${imgs[0]}" alt="${p.title[lang]}" loading="lazy" />`+
-        (imgs[1] ? `<img class="thumb-img secondary" src="${imgs[1]}" alt="${p.title[lang]} – תכנית בנייה" loading="lazy" onerror="this.remove()" />` : '')+
-      `</div>`
-    : `<div class="thumb">${p.title[lang].substring(0, 2)}</div>`;
+  let imgHTML = '';
+  if (p.id === 1) {
+    // Special 3-step carousel: primary, secondary (if exists), and YouTube video
+    const videoId = 'il4dtzUaMwM';
+    const videoURL = `https://www.youtube.com/embed/${videoId}`;
+    imgHTML = `
+      <div class="thumb" aria-label="${p.title[lang]}" data-carousel="montessori">
+        <div class="carousel-frame" data-step="0" style="position:absolute; inset:0;">
+          ${primary ? `<img class="thumb-img step step-0" src="${primary}" alt="${p.title[lang]}" loading="lazy" style="opacity:1" />` : ''}
+          ${secondary ? `<img class="thumb-img step step-1" src="${secondary}" alt="${p.title[lang]} – מצב 2" loading="lazy" style="opacity:0" />` : ''}
+          <iframe class="thumb-img step step-2" src="${videoURL}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="opacity:0; width:100%; height:100%"></iframe>
+        </div>
+        <div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span><span class="dot"></span></div>
+      </div>`;
+  } else {
+    const imgs = [];
+    if (primary) imgs.push(primary);
+    if (secondary) imgs.push(secondary);
+    imgHTML = imgs.length
+      ? `<div class="thumb" aria-label="${p.title[lang]}">`+
+          `<img class="thumb-img primary" src="${imgs[0]}" alt="${p.title[lang]}" loading="lazy" />`+
+          (imgs[1] ? `<img class="thumb-img secondary" src="${imgs[1]}" alt="${p.title[lang]} – תכנית בנייה" loading="lazy" onerror="this.remove()" />` : '')+
+          (imgs[1] ? `<div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span></div>` : '')+
+        `</div>`
+      : `<div class="thumb">${p.title[lang].substring(0, 2)}</div>`;
+  }
   return `
     <article class="plan-card">
       ${imgHTML}
@@ -130,4 +148,49 @@ window.addEventListener('DOMContentLoaded', () => {
   if (chip) chip.childNodes[0].nodeValue = t[lang].total.replace(/"/g,'') + ' ';
   render(plans);
   input.addEventListener('input', () => render(searchPlans(input.value)));
+
+  // Mobile: tap-to-toggle images with dots indicator (also works on desktop click)
+  const enableThumbToggles = () => {
+    const cards = Array.from(document.querySelectorAll('.plan-card .thumb'));
+    cards.forEach(thumb => {
+      const isMontessori = thumb.dataset.carousel === 'montessori';
+      const dots = thumb.querySelectorAll('.dot');
+      if (isMontessori) {
+        // 3-step carousel, click to advance
+        const steps = thumb.querySelectorAll('.step');
+        let step = 0;
+        const sync = () => {
+          steps.forEach((el, i) => { el.style.opacity = (i === step ? '1' : '0'); });
+          dots.forEach((d, i) => d.classList.toggle('active', i === step));
+        };
+        sync();
+        thumb.addEventListener('click', () => { step = (step + 1) % 3; sync(); });
+        // Disable hover flips for this card
+        thumb.classList.add('no-hover');
+      } else {
+        const primary = thumb.querySelector('.thumb-img.primary');
+        const secondary = thumb.querySelector('.thumb-img.secondary');
+        if (!primary || !secondary) return;
+        let showingSecondary = false;
+        const updateDots = () => {
+          if (dots.length === 2){
+            dots[0].classList.toggle('active', !showingSecondary);
+            dots[1].classList.toggle('active', showingSecondary);
+          }
+        };
+        const show = (sec) => {
+          showingSecondary = !!sec;
+          thumb.classList.toggle('show-secondary', showingSecondary);
+          updateDots();
+        };
+        updateDots();
+        thumb.addEventListener('click', ()=>{ show(!showingSecondary); });
+      }
+    });
+  };
+  // Run after initial render and on further renders
+  enableThumbToggles();
+  const grid = document.getElementById('plans-grid');
+  const mo = new MutationObserver(() => { enableThumbToggles(); });
+  if (grid) mo.observe(grid, { childList:true });
 });

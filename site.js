@@ -215,64 +215,103 @@
     if (bUnits) bUnits.addEventListener('click', toggleUnits);
     const bCur = el('#btn-currency');
     if (bCur) bCur.addEventListener('click', cycleCurrency);
-    // Mobile: Saw thickness popover in Block 1
+    // Saw thickness modal in Block 1 (desktop + mobile)
     try{
-      const mqSaw = window.matchMedia('(max-width: 700px)');
       const btn = document.getElementById('saw-settings-btn');
-      const pop = document.getElementById('saw-popover');
       const inputMain = document.getElementById('saw-thickness');
       const unitMain = document.getElementById('saw-unit');
-      const input = document.getElementById('saw-popover-input');
-      const unit = document.getElementById('saw-popover-unit');
-      const save = document.getElementById('saw-popover-save');
-      const cancel = document.getElementById('saw-popover-cancel');
-      const sync = () => {
-        if (!inputMain || !input || !unit || !unitMain) return;
-        input.value = inputMain.value;
-        unit.textContent = unitMain.textContent || 'mm';
-      };
-      const updateVis = () => {
-        const on = mqSaw.matches;
-        if (btn) btn.hidden = !on;
-        if (pop) { pop.hidden = true; try{pop.style.display='none';}catch{} }
-        if (btn) btn.setAttribute('aria-expanded','false');
-      };
-      updateVis();
-      mqSaw.addEventListener('change', updateVis);
-      if (btn && pop && inputMain && input && save && cancel){
+      if (btn) btn.hidden = false;
+      if (btn && inputMain && unitMain){
         btn.addEventListener('click', ()=>{
-          // Toggle behavior: second click closes
-          const isOpen = pop && pop.hidden === false && pop.style.display !== 'none';
-          if (isOpen){
-            try{ pop.hidden = true; pop.style.display='none'; }catch{}
-            btn.setAttribute('aria-expanded','false');
-            return;
-          }
-          sync();
-          try{ pop.hidden = false; pop.style.display='block'; }catch{}
-          btn.setAttribute('aria-expanded','true');
-        });
-        cancel.addEventListener('click', ()=>{
-          try{ pop.hidden = true; pop.style.display='none'; }catch{}
-          btn.setAttribute('aria-expanded','false');
-        });
-        save.addEventListener('click', ()=>{
-          if (inputMain) inputMain.value = input.value;
-          // Fire input event so any listeners update
-          try { inputMain.dispatchEvent(new Event('input', { bubbles:true })); } catch{}
-          try{ pop.hidden = true; pop.style.display='none'; }catch{}
-          btn.setAttribute('aria-expanded','false');
-        });
-        // Close popover when clicking outside
-        document.addEventListener('click', (e)=>{
-          if (!pop || pop.hidden) return;
-          const inside = e.target === pop || pop.contains(e.target) || e.target === btn || btn.contains(e.target);
-          if (!inside) { try{ pop.hidden = true; pop.style.display='none'; }catch{} btn.setAttribute('aria-expanded','false'); }
+          const unitLbl = unitMain.textContent || 'mm';
+          const modal = document.createElement('div');
+          modal.className = 'global-modal kerf-modal';
+          modal.setAttribute('role','dialog');
+          modal.setAttribute('aria-modal','true');
+          modal.innerHTML = `
+            <div class="global-modal-backdrop"></div>
+            <div class="global-modal-box" role="document">
+              <h3 class="global-modal-title">${(document.documentElement.lang||'he')==='he'?'עובי מסור':'Saw kerf'}</h3>
+              <div class="global-modal-body">
+                <div class="kerf-row">
+                  <input id="kerf-input" type="number" min="0" step="0.1" value="${inputMain.value}" aria-label="${(document.documentElement.lang||'he')==='he'?'עובי מסור':'Saw kerf'}" />
+                  <span class="chip">${unitLbl}</span>
+                </div>
+              </div>
+              <div class="global-modal-actions">
+                <button id="kerf-save" class="btn primary">${(document.documentElement.lang||'he')==='he'?'שמור':'Save'}</button>
+                <button id="kerf-cancel" class="btn">${(document.documentElement.lang||'he')==='he'?'ביטול':'Cancel'}</button>
+              </div>
+            </div>`;
+          document.body.appendChild(modal);
+          const close = () => { try{ modal.remove(); }catch{} };
+          modal.querySelector('.global-modal-backdrop')?.addEventListener('click', close);
+          modal.querySelector('#kerf-cancel')?.addEventListener('click', close);
+          modal.querySelector('#kerf-save')?.addEventListener('click', ()=>{
+            const v = modal.querySelector('#kerf-input');
+            if (v && inputMain){ inputMain.value = v.value; try{ inputMain.dispatchEvent(new Event('input', { bubbles:true })); }catch{} }
+            close();
+          });
+          document.addEventListener('keydown', function onKey(e){ if(e.key==='Escape'){ close(); document.removeEventListener('keydown', onKey);} });
         });
       }
     }catch{}
 
-    // Mobile drawer setup (present on index page; safe-guard checks on others)
+    // Ensure mobile drawer shell exists on every page (inject if missing)
+    try {
+      let hamburger = document.getElementById('hamburger');
+      let backdrop = document.getElementById('drawer-backdrop');
+      let drawer = document.getElementById('mobile-drawer');
+      const ensureNavLinks = (container) => {
+        try{
+          const src = Array.from(document.querySelectorAll('.main-nav .nav-wrap a'));
+          if (src.length && container){
+            container.innerHTML = src.map(a=>`<a href="${a.getAttribute('href')||'#'}" class="nav-link${a.classList.contains('active')?' active':''}">${a.textContent||''}</a>`).join('');
+          } else if (container){
+            container.innerHTML = [
+              ['index.html', 'מחשבון חיתוך אופטימלי'],
+              ['plans.html', 'תוכניות בנייה להורדה'],
+              ['about.html', 'אודות'],
+              ['contact.html', 'צור קשר']
+            ].map(([h,t])=>`<a href="${h}" class="nav-link">${t}</a>`).join('');
+          }
+        }catch{}
+      };
+      if (!hamburger){
+        hamburger = document.createElement('button');
+        hamburger.id = 'hamburger';
+        hamburger.className = 'hamburger';
+        hamburger.setAttribute('aria-label','menu');
+        hamburger.setAttribute('aria-controls','mobile-drawer');
+        hamburger.setAttribute('aria-expanded','false');
+        hamburger.hidden = true;
+        hamburger.innerHTML = '<span class="bars" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>';
+        document.body.appendChild(hamburger);
+      }
+      if (!backdrop){
+        backdrop = document.createElement('div');
+        backdrop.id = 'drawer-backdrop';
+        backdrop.className = 'drawer-backdrop';
+        backdrop.hidden = true;
+        document.body.appendChild(backdrop);
+      }
+      if (!drawer){
+        drawer = document.createElement('aside');
+        drawer.id = 'mobile-drawer';
+        drawer.className = 'mobile-drawer';
+        drawer.hidden = true;
+        const nav = document.createElement('nav');
+        nav.setAttribute('aria-label','mobile');
+        drawer.appendChild(nav);
+        document.body.appendChild(drawer);
+        ensureNavLinks(nav);
+      } else {
+        const nav = drawer.querySelector('nav[aria-label="mobile"]');
+        if (nav && !nav.children.length) ensureNavLinks(nav);
+      }
+    } catch{}
+
+    // Mobile drawer setup
     try {
       const mqMobile = window.matchMedia('(max-width: 900px)');
       const hamburger = document.getElementById('hamburger');
@@ -327,31 +366,32 @@
       });
     } catch{}
 
-    // Index page: on mobile, move Project Name below the buttons; restore in header on desktop
+  // Index page: (previously moved Project Name on mobile). Now we hide it entirely on mobile via CSS, so no DOM moves are needed.
     try {
       const path = (location.pathname || '').toLowerCase();
       const isIndex = path.endsWith('/index.html') || path.endsWith('index.html') || /\/(?:index.html)?$/.test(path);
       if (isIndex) {
-        const mq = window.matchMedia('(max-width: 700px)');
-        const nameRow = document.querySelector('#block-req .req-name');
-        const actions = document.querySelector('#block-req .actions.actions-center');
-        const head = document.querySelector('#block-req .card-head');
-        const ensurePlacement = () => {
-          if (!nameRow || !actions || !head) return;
-          if (mq.matches) {
-            if (!nameRow.classList.contains('is-mobile-below')) {
-              actions.insertAdjacentElement('afterend', nameRow);
-              nameRow.classList.add('is-mobile-below');
-            }
-          } else {
-            if (nameRow.classList.contains('is-mobile-below')) {
-              head.insertAdjacentElement('afterbegin', nameRow);
-              nameRow.classList.remove('is-mobile-below');
-            }
-          }
+    // No action required; CSS handles mobile hide.
+      }
+    } catch{}
+
+    // Match Add-wood button (top row) width to the combined width of the two DB controls below
+    try {
+      const topRow = document.querySelector('#block-db .db-right'); // contains add-wood
+      const bottomRow = document.querySelector('#block-db .db-add-wrap'); // contains show+file
+      if (topRow && bottomRow){
+        const syncWidth = () => {
+          try{
+            const rect = bottomRow.getBoundingClientRect();
+            const w = Math.max(0, Math.round(rect.width));
+            topRow.style.width = w ? (w + 'px') : '';
+            const btn = topRow.querySelector('#add-db-row');
+            if (btn) btn.style.width = '100%';
+          }catch{}
         };
-        ensurePlacement();
-        mq.addEventListener('change', ensurePlacement);
+        syncWidth();
+        window.addEventListener('resize', syncWidth, { passive:true });
+        try{ new ResizeObserver(syncWidth).observe(bottomRow); }catch{}
       }
     } catch{}
   });

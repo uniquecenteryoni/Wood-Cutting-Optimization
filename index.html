@@ -64,8 +64,10 @@
             <button id="project-name-ok" class="btn" data-i18n="save" title="שמור">save</button>
           </div>
         </div>
-        <!-- Mobile-only: saw thickness settings trigger and popover -->
-        <button id="saw-settings-btn" class="btn icon-btn saw-settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="saw-popover" title="הגדרות" hidden>⚙︎</button>
+        <!-- Saw thickness settings trigger (desktop + mobile) -->
+        <button id="saw-settings-btn" class="btn icon-btn saw-settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="saw-popover" title="עובי מסור">
+          <img src="pics/saw.png" alt="עובי מסור" style="width:24px;height:24px;display:block" />
+        </button>
         <div id="saw-popover" class="saw-popover" role="dialog" aria-modal="false" hidden>
           <label class="inline" style="gap:8px">
             <span data-i18n="sawThickness">עובי מסור</span>
@@ -95,18 +97,18 @@
       </div>
   <div class="db-head">
         <div class="db-right">
+          <button id="add-db-row" class="btn add-wood" data-i18n="addTree">הוסף עץ למאגר</button>
+        </div>
+        <div class="db-add-wrap">
           <button id="toggle-db" class="btn" data-i18n="showDb">הצג מאגר עצים</button>
           <label class="btn file-btn">
             <input id="file-input" type="file" accept=".csv,.xlsx,.xls" />
-            <span data-i18n="loadFile">טען קובץ מאגר עצים</span>
+            <span data-i18n="loadFile">טען קובץ (.xlsx, .xls, .csv)</span>
           </label>
         </div>
       </div>
 
   <div id="db-area" class="db-area hidden" aria-hidden="true">
-        <div class="db-controls" style="margin-bottom:12px">
-          <button id="add-db-row" class="btn" data-i18n="addTree">הוסף עץ למאגר</button>
-        </div>
         <div id="db-table-wrap"></div>
       </div>
 

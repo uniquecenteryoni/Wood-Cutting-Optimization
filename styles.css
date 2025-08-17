@@ -57,7 +57,7 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .container > #block-req.card:hover,
 .container > #block-db.card:hover,
 .container > #block-res.card:hover{ background: #fdfcfb }
-.card-head{display:flex;justify-content:space-between;align-items:center;position:relative;gap:8px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;position:relative;gap:8px}
 .card-head h2{margin:0 auto}
 .card-head .req-name{position:absolute;right:0;left:auto;top:0;display:flex;align-items:flex-start}
 html[dir="rtl"] .card-head .req-name{right:0;left:auto}
@@ -165,7 +165,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .file-btn span{font:inherit}
 .req-row .small{font-size:12px;color:var(--muted)}
 .results-section{margin-top:12px}
-.diagram{border:1px solid var(--border);border-radius:6px;padding:8px;background:#fff}
+.diagram{border:none;border-radius:0;padding:8px;background:#fff}
 .diagram text{pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .legend .item{display:flex;gap:6px;align-items:center}
@@ -203,31 +203,37 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .plan-card .thumb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transition:opacity .25s ease}
 .plan-card .thumb-img.secondary{opacity:0}
 @media (hover:hover) and (pointer:fine){
-	.plan-card:hover .thumb-img.secondary{opacity:1}
-	.plan-card:hover .thumb-img.primary{opacity:0}
+	.plan-card:hover .thumb:not(.no-hover) .thumb-img.secondary{opacity:1; transform:translateX(0)}
+	.plan-card:hover .thumb:not(.no-hover) .thumb-img.primary{opacity:0; transform:translateX(0)}
 }
 .plan-card .body{padding:10px 12px}
 .plan-card h3{margin:0 0 6px;font-size:18px}
 .plan-card p{margin:0 0 10px;color:var(--muted)}
 .plan-card .price{font-weight:700;margin-bottom:10px}
-.plan-card .card-actions{padding:0 12px 12px}
+.plan-card .card-actions{margin-top:auto; padding:0 12px 14px; display:flex; justify-content:center}
+.plan-card .card-actions .btn{font-size:18px; padding:12px 16px; min-width:60%; border-radius:12px}
 /* About */
-.about-wrap{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:center}
-.about-wrap .about-text{padding-inline: clamp(16px, 6vw, 64px); max-width: 48ch}
-.about-photo img{width:100%;height:auto;border-radius:12px;border:1px solid var(--border);display:block}
+.about-wrap{display:grid;grid-template-columns:1.2fr 1fr;grid-template-areas:"text photo";gap:16px;align-items:stretch; min-height:60vh; max-width:1200px; margin-inline:auto}
+.container > .card.about-wrap{padding-left:clamp(24px, 8vw, 88px); padding-right:clamp(24px, 8vw, 88px)}
+.about-wrap .about-text{grid-area:text;padding-inline:0; max-width: 48ch}
+.about-wrap .about-photo{grid-area:photo; display:flex}
+.about-photo img{width:100%;height:100%;object-fit:cover;border-radius:12px;border:1px solid var(--border);display:block}
 .about-text h2{margin-top:0}
 .about-meta{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
-@media(max-width:900px){.about-wrap{grid-template-columns:1fr}}
+@media(max-width:900px){
+	.about-wrap{grid-template-columns:1fr;grid-template-areas:"photo" "text"; min-height:auto}
+	.about-photo img{height:auto}
+}
 /* הצגה אנכית של הבלוקים גם במסכים רחבים */
 @media(min-width:900px){.container{grid-template-columns:1fr}}
 @media(max-width:600px){.topbar h1{font-size:16px}.btn{padding:6px 8px}.container{grid-template-columns:1fr}}
 
 /* Calculator header (requirements block) — center controls and enlarge heading */
-#block-req .card-head{flex-direction:column;align-items:center;gap:8px}
-#block-req .card-head h2{font-size:36px}
+#block-req .card-head{flex-direction:column;align-items:stretch;gap:8px}
+#block-req .card-head h2{font-size:36px; align-self:center}
 
 #block-req .actions.actions-center{justify-content:center}
-#block-req .small-controls{justify-content:flex-start;flex-wrap:wrap}
+#block-req .small-controls{justify-content:flex-start;flex-wrap:wrap; align-items:flex-start}
 #block-req .small-controls .inline{justify-content:flex-start}
 #block-db .card-head h2, #block-res h2{font-size:36px}
 /* Normalize Block 3 title spacing and alignment */
@@ -257,6 +263,8 @@ html[dir="rtl"] .req-saw{justify-content:flex-end}
 #block-db .card-head{justify-content:center}
 #block-db .db-head{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
 #block-db .db-right{display:flex;align-items:center;gap:8px;justify-content:center}
+#block-db .db-add-wrap{display:flex;justify-content:center; gap:8px}
+#block-db .db-add-wrap .btn{height:40px}
 #block-db .db-status{position:absolute;left:16px;bottom:16px;min-height:18px;color:#2e7d32;margin:0;text-align:left}
 #block-db .db-status:empty{display:none}
 html[dir="rtl"] #block-db .db-status{left:16px;right:auto;text-align:left}
@@ -266,6 +274,27 @@ html[dir="rtl"] #block-db .db-status{left:16px;right:auto;text-align:left}
 /* Block 3: make export PDF button larger and add extra spacing */
 #block-res .actions.actions-center{margin-top:18px}
 #export-pdf.btn{font-size:17px;padding:10px 15px;margin-top:8px}
+
+/* Results error modal (inline within Block 3) */
+#block-res .res-modal{position:relative;margin:12px auto 0;max-width:960px}
+#block-res .res-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.12);border-radius:12px}
+#block-res .res-modal-box{position:relative;margin:0 auto;max-width:720px;background:#fff8f8;border:1px solid var(--border);border-left:4px solid #d32f2f;border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+#block-res .res-modal-title{margin:0 0 6px;color:#b71c1c}
+#block-res .res-modal-body{color:#8a1f1f}
+#block-res .res-modal-actions{display:flex;justify-content:center;margin-top:10px}
+
+/* Add wood button pastel red style */
+.btn.add-wood{background:#ffe5e5;border-color:#f5c2c2;color:#000; text-align:center; font-size:17px}
+.btn.add-wood:hover{background:#ffd9d9}
+.btn.add-wood:active{transform:scale(.98)}
+
+/* Saw icon button styling (desktop + mobile) */
+#saw-settings-btn{display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; padding:0}
+#saw-settings-btn img{width:24px; height:24px}
+
+/* Make hamburger bars horizontal */
+.hamburger .bars{flex-direction:column}
+.hamburger .bar{width:24px; height:3px}
 
 /* Initial compact view (first load): ensure blocks up to the Summarize button fit without scrolling */
 body.initial-compact{overflow-y:auto}
@@ -297,6 +326,7 @@ body.initial-compact-tight h2{font-size:28px}
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .form-field{display:flex;flex-direction:column;gap:6px}
 .form-field-full{grid-column:1/-1}
+.pay-form form{padding:12px 14px}
 .form-field label{font-size:14px;color:#333}
 .form-field input,.form-field textarea{padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#fff}
 .form-field input,.form-field textarea{ background: #faf6f2 }
@@ -324,14 +354,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 	.main-nav{display:none}
 	.hamburger{
 		position:fixed; z-index:1100; top:calc(96px + env(safe-area-inset-top)); transform:none;
-		width:44px; height:72px; border-radius:999px; border:1px solid var(--border);
+		width:56px; height:56px; border-radius:50%; border:1px solid var(--border);
 		background:#fff; box-shadow:0 4px 20px rgba(0,0,0,.12);
 		display:flex; align-items:center; justify-content:center; cursor:pointer;
 	}
 	html[dir="rtl"] .hamburger{ right:10px }
 	html[dir="ltr"] .hamburger{ left:10px }
-	.hamburger .bars{display:flex; gap:6px}
-	.hamburger .bar{width:4px; height:24px; background:#2b2b2b; border-radius:3px}
+	.hamburger .bars{display:flex; gap:6px; flex-direction:column}
+	.hamburger .bar{width:24px; height:3px; background:#2b2b2b; border-radius:3px}
 	.hamburger:active{transform:scale(.96)}
 
 	.drawer-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:1099; display:none}
@@ -348,18 +378,95 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 	.mobile-drawer .nav-link{display:block; padding:12px 10px; border-radius:10px; margin-bottom:6px}
 }
 
+/* Mobile tap slider for plan thumbnails + dots */
+.plan-card .thumb{position:relative; overflow:hidden}
+.plan-card .thumb .dots{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;justify-content:center}
+.plan-card .thumb .dot{width:8px;height:8px;border-radius:50%;border:2px solid rgba(255,255,255,.9);background:transparent}
+.plan-card .thumb .dot.active{background:#fff}
+/* Ensure 3-step carousel frames overlay each other */
+.plan-card .thumb .step{position:absolute; inset:0; transition:opacity .25s ease}
+/* RTL: make the first dot appear on the right */
+html[dir="rtl"] .plan-card .thumb .dots{flex-direction:row-reverse}
+/* Slide transition between images on tap */
+.plan-card .thumb-img{transition:transform .28s ease, opacity .28s ease}
+.plan-card .thumb-img.primary{transform:translateX(0);opacity:1}
+.plan-card .thumb-img.secondary{transform:translateX(100%);opacity:0}
+.plan-card .thumb.show-secondary .thumb-img.primary{transform:translateX(-100%);opacity:0}
+.plan-card .thumb.show-secondary .thumb-img.secondary{transform:translateX(0);opacity:1}
+
+/* Global centered modal for errors and alerts */
+.global-modal{position:fixed; inset:0; z-index:1300; display:flex; align-items:center; justify-content:center}
+.global-modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.35); backdrop-filter:saturate(120%) blur(2px)}
+.global-modal-box{position:relative; z-index:1; width:min(92vw, 560px); background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 36px rgba(0,0,0,.22); padding:16px}
+.global-modal-title{margin:0 0 8px}
+.global-modal-body{color:#8a1f1f; background:#fff8f8; border:1px solid #f2c6c6; border-left:4px solid #d32f2f; border-radius:10px; padding:10px}
+.global-modal-actions{display:flex; justify-content:center; gap:8px; margin-top:12px}
+
+/* Desktop: pin saw icon and project name under the top separator, keep title at standard offset */
+@media(min-width:701px){
+	#block-req .card-head{align-items:flex-start}
+	/* Card has 56px top padding; keep controls above the title and around 3px below the border */
+	.card-head .req-name{top:-53px}
+	#saw-settings-btn{top:-53px}
+}
+
+/* DB buttons sizing: make top row button span width of bottom controls */
+#block-db .db-right{width:100%; justify-content:center}
+#block-db .db-right #add-db-row{width:100%}
+
+/* Overrides: align Block 1 controls to top and use saw icon globally */
+.card-head{align-items:flex-start}
+.card-head .req-saw{display:none !important}
+#block-req .card-head{align-items:stretch}
+#block-req .card-head h2{align-self:center}
+#saw-settings-btn{position:absolute; top:0; left:0}
+html[dir="rtl"] #saw-settings-btn{right:auto; left:3px}
+html[dir="ltr"] #saw-settings-btn{left:3px}
+.card-head .req-name{position:absolute; top:0; right:3px}
+
+/* Desktop: place Block 1 header controls right under the nav separator */
+@media(min-width:701px){
+	.container > #block-req.card{padding-top:56px}
+}
+
+/* Desktop: equalize initial block heights before content expands */
+@media(min-width:701px){
+	.container > #block-req.card,
+	.container > #block-db.card,
+	.container > #block-res.card{ min-height: 320px }
+}
+
+/* Kerf (saw) modal clean design */
+.kerf-modal .global-modal-body{border:none; background:transparent; padding:0}
+.kerf-modal .kerf-row{display:flex; align-items:center; gap:10px; justify-content:center; margin-top:8px}
+.kerf-modal .kerf-row input{padding:10px 12px; border:1px solid var(--border); border-radius:10px; font:inherit; width:140px; text-align:center; background:#fff; height:40px}
+.kerf-modal .kerf-row .chip{height:40px; display:inline-flex; align-items:center; padding:0 12px; border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit}
+.kerf-modal .global-modal-actions .btn{min-width:96px}
+
+/* Ensure DB buttons are vertically and horizontally centered */
+#block-db .db-head .btn{display:inline-flex; align-items:center; justify-content:center}
+
+/* Ensure DB action buttons have uniform height */
+#block-db .db-head .btn{height:40px; display:inline-flex; align-items:center}
+
+/* Hamburger bars horizontal */
+.hamburger .bars{flex-direction:column}
+.hamburger .bar{width:24px; height:3px}
+
 /* ===== Mobile Block 1 layout tweaks ===== */
 @media(max-width:700px){
 	/* Show project name at the very top of Block 1 header */
 	#block-req .card-head{position:static; align-items:center; gap:8px}
-	#block-req .card-head .req-name{position:static; order:0; align-self:stretch; display:flex; justify-content:center}
+	#block-req .card-head .req-name{display:none !important}
 	#block-req .card-head h2{order:1; margin: 0}
 	/* Hide original saw row on mobile */
 		#block-req .card-head .req-saw{display:none !important}
 		#block-req{display:flex; flex-direction:column; position:relative}
 	/* Mobile saw settings trigger */
-		#saw-settings-btn{display:inline-flex !important; position:absolute; top:0; left:0; right:auto; font-size:20px; width:40px; height:40px; align-items:center; justify-content:center}
+		#saw-settings-btn{display:inline-flex !important; position:absolute; top:3px; right:auto; font-size:20px; width:40px; height:40px; align-items:center; justify-content:center}
+		html[dir="rtl"] #saw-settings-btn{left:3px}
+		html[dir="ltr"] #saw-settings-btn{left:3px}
 		.saw-popover{position:absolute; top:48px; left:0; right:auto; background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.16); z-index:20}
 	/* Spacing when project name sits below the buttons */
-		#block-req .req-name.is-mobile-below{margin-top:10px; justify-content:center}
+		#block-req .req-name.is-mobile-below{display:none !important}
 }

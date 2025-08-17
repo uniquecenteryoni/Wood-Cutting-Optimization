@@ -35,7 +35,7 @@ const translations = {
         addReq: 'הוסף דרישה',
         calcOpt: 'חשב אופטימיזציה',
         showDb: 'הצג מאגר עצים',
-        loadFile: 'טען קובץ מאגר עצים',
+    loadFile: 'טען קובץ (.xlsx, .xls, .csv)',
         addTree: 'הוסף עץ למאגר',
         exportPdf: 'סכם בקובץ PDF',
         noResults: 'אין תוצאות עדיין. לחץ "חשב אופטימיזציה" כדי להתחיל.',
@@ -58,7 +58,7 @@ const translations = {
         addReq: 'Add Requirement',
         calcOpt: 'Compute Optimization',
         showDb: 'Show Inventory',
-        loadFile: 'Load inventory file',
+    loadFile: 'Load file (.xlsx, .xls, .csv)',
         addTree: 'Add wood to inventory',
         exportPdf: 'Export PDF',
         noResults: 'No results yet. Click "Compute Optimization" to start.',
@@ -71,7 +71,8 @@ const translations = {
         regular: 'Regular',
         bold: 'Bold',
         extraInfo: 'Extra info',
-        save: 'save'
+    save: 'save',
+    ok: 'OK'
     }
 };
 
@@ -1346,6 +1347,7 @@ function renderResults(results) {
             rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="#f3f3f3" />`);
             rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="url(#${svgId}_wasteHatch)" />`);
     const unitShort = unitSystem==='imperial' ? '″' : (language==='he' ? 'ס״מ' : 'cm');
+    const showLabels = !!displaySettings.showPieceLabels;
         for (let i=0;i<pieces.length;i++) {
             const pw = Math.max(0.5, (pieces[i]*scale)); // ללא עיגול כדי למנוע הצטברות שגיאה
             const key = keyFor(pieces[i]); // קיבוץ לפי גודל בתצוגה
@@ -1358,7 +1360,7 @@ function renderResults(results) {
             const centerX = x + pw/2;
             const clipId = `${svgId}_clip_${i}`;
             clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="10" width="${pw}" height="40" /></clipPath>`);
-            if (displaySettings.showPieceLabels) {
+            if (showLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                 if (pw >= 86) {
                     rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?'':' '} ${unitSystem==='imperial'?'':unitStr}</text>`);
@@ -1394,18 +1396,20 @@ function renderResults(results) {
             const centerX = x + wasteW/2;
             const clipIdW = `${svgId}_clip_waste`;
             clipDefs.push(`<clipPath id="${clipIdW}"><rect x="${x}" y="10" width="${wasteW}" height="40" /></clipPath>`);
-            const weightW = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-            if (wasteW >= 86) {
-                rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:' '+unitStr}</text>`);
-            } else if (wasteW >= 42) {
-                const yTop = 28;
-                if (unitSystem==='imperial') {
-                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}${unitShort}</text>`);
+            if (showLabels) {
+                const weightW = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
+                if (wasteW >= 86) {
+                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:' '+unitStr}</text>`);
+                } else if (wasteW >= 42) {
+                    const yTop = 28;
+                    if (unitSystem==='imperial') {
+                        rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}${unitShort}</text>`);
+                    } else {
+                        rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
+                    }
                 } else {
-                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
+                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="11" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
                 }
-            } else {
-                rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="11" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
             }
         }
         // קו עדין לכל רוחב המסך + טקסט אורך קורה ממורכז מעל הקו
@@ -1421,10 +1425,10 @@ function renderResults(results) {
     const center = w / 2;
     const leftX2 = Math.max(0, center - halfGap);
     const rightX1 = Math.min(w, center + halfGap);
-    const baseLineLeft = `<line x1="0" y1="${lineY}" x2="${leftX2}" y2="${lineY}" stroke="#ccc" stroke-width="1" />`;
-    const baseLineRight = `<line x1="${rightX1}" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="#ccc" stroke-width="1" />`;
+    const baseLineLeft = showLabels ? `<line x1="0" y1="${lineY}" x2="${leftX2}" y2="${lineY}" stroke="#ccc" stroke-width="1" />` : '';
+    const baseLineRight = showLabels ? `<line x1="${rightX1}" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="#ccc" stroke-width="1" />` : '';
     const weightBase = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-    const rulerText = `<text ${weightBase} x="${center}" y="${lineY-2}" font-size="13" text-anchor="middle" fill="#444">${beamLenLbl}</text>`;
+    const rulerText = showLabels ? `<text ${weightBase} x="${center}" y="${lineY-2}" font-size="13" text-anchor="middle" fill="#444">${beamLenLbl}</text>` : '';
     const defs = `<defs>${defsBase}${clipDefs.join('')}</defs>`;
     return `<svg class="diagram" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${defs}${rects.join('')}${baseLineLeft}${baseLineRight}${rulerText}</svg>`;
     }
@@ -1498,7 +1502,7 @@ function renderResults(results) {
                 }
             }
         });
-        // ציור והצגת מידות לכל מלבן פחת (freeRects)
+    // ציור והצגת מידות לכל מלבן פחת (freeRects)
         if (Array.isArray(p.freeRects) && p.freeRects.length) {
             for (let i=0;i<p.freeRects.length;i++) {
                 const fr = p.freeRects[i];
@@ -1509,7 +1513,7 @@ function renderResults(results) {
                 // מסגרת עדינה סביב אזור הפחת
                 rects.push(`<rect x="${px}" y="${py}" width="${Math.max(0.5,pw)}" height="${Math.max(0.5,ph)}" fill="none" stroke="#bdbdbd" stroke-width="1" />`);
                 // תוויות מידות לפי יחידות תצוגה (ס"מ או אינץ')
-                if (displaySettings.showPieceLabels) {
+                if (showLabels) {
                     const inchSym = '″';
                     const wDisp = unitSystem==='imperial' ? (wmm/25.4) : (wmm/10);
                     const hDisp = unitSystem==='imperial' ? (hmm/25.4) : (hmm/10);
@@ -1544,19 +1548,42 @@ function renderResults(results) {
     return `<svg class="diagram" viewBox="0 0 ${viewW} ${platePxH + extraBottom}" preserveAspectRatio="none">${defs}${rects.join('')}${sizeText}</svg>`;
     }
 
-        const errHtml = Array.isArray(results.errors) && results.errors.length
-                ? `<div class="results-section" style="border-left:4px solid #d32f2f; background:#fdecea; color:#b71c1c; padding:8px 12px; border-radius:6px;">${results.errors.map(e=>`<div>• ${e}</div>`).join('')}</div>`
-                : '';
     const title1 = language==='he' ? 'חיתוכים' : 'Cuts';
     const title2 = language==='he' ? 'עלויות' : 'Costs';
     const title3 = language==='he' ? 'עצים לרכישה' : 'Items to Purchase';
-        area.innerHTML = `
-            ${errHtml}
+                area.innerHTML = `
             <div class="results-section"><h3>${title1}</h3>${table1()}</div>
             <div class="results-section"><h3>${title2}</h3>${table2()}</div>
             <div class="results-section"><h3>${title3}</h3>${table3()}</div>
             <div class="results-section">${diagrams()}</div>
         `;
+
+        // Show calculation errors in a full-screen modal with an OK button
+        try {
+            const root = document.body;
+            const prev = document.getElementById('global-error-modal');
+            if (prev) prev.remove();
+            if (Array.isArray(results.errors) && results.errors.length) {
+                const msgs = results.errors.map(e=>`<div>• ${e}</div>`).join('');
+                const okLbl = (language==='he') ? 'אישור' : ((translations[language] && translations[language].ok) ? translations[language].ok : 'OK');
+                const title = language==='he' ? 'שגיאות בחישוב' : 'Calculation Errors';
+                const modalHtml = `
+                    <div id="global-error-modal" class="global-modal" role="dialog" aria-modal="true" aria-labelledby="global-modal-title">
+                        <div class="global-modal-backdrop"></div>
+                        <div class="global-modal-box">
+                            <h3 id="global-modal-title" class="global-modal-title">${title}</h3>
+                            <div class="global-modal-body">${msgs}</div>
+                            <div class="global-modal-actions"><button id="global-modal-ok" class="btn primary">${okLbl}</button></div>
+                        </div>
+                    </div>`;
+                root.insertAdjacentHTML('beforeend', modalHtml);
+                const modal = document.getElementById('global-error-modal');
+                const close = () => { try { modal && modal.remove(); } catch(_){} };
+                modal?.querySelector('#global-modal-ok')?.addEventListener('click', close);
+                modal?.querySelector('.global-modal-backdrop')?.addEventListener('click', close);
+                document.addEventListener('keydown', function onKey(e){ if(e.key==='Escape'){ close(); document.removeEventListener('keydown', onKey); } });
+            }
+        } catch{}
 
     // אירועי הגדרות תצוגה
     const dsBtn = document.getElementById('btn-display-settings');
@@ -1802,6 +1829,11 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
     setTimeout(() => {
         renderResults(res);
         hideLoader();
+        // Auto-scroll the Results block so the title is at the top of the viewport
+        try {
+            const resTitle = document.querySelector('#block-res h2');
+            resTitle && resTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch {}
     }, remaining);
 });
 
@@ -1831,7 +1863,41 @@ if (toggleDbBtn) {
 
 const addDbRowBtn = document.getElementById('add-db-row');
 if (addDbRowBtn) addDbRowBtn.addEventListener('click', () => {
-    // הצג שורת עריכה חדשה בראש הטבלה
+    // Always open the DB area
+    const area = document.getElementById('db-area');
+    const toggleDbBtn = document.getElementById('toggle-db');
+    if (area) {
+        area.classList.remove('hidden');
+        area.setAttribute('aria-hidden','false');
+        if (toggleDbBtn) {
+            toggleDbBtn.textContent = (language === 'he' ? 'הסתר מאגר עצים' : 'Hide Inventory');
+            toggleDbBtn.setAttribute('aria-expanded','true');
+        }
+    }
+    // Behavior:
+    // 1) If no inventory loaded yet, create minimal headers/units to allow an empty row entry.
+    // 2) If inventory exists, just show a new editable row at the top for quick entry.
+    if (!inventoryRows || inventoryRows.length === 0) {
+        // Seed with default headers/units for a clean empty table
+        const he = (language === 'he');
+        const hdr = he ? ['סוג','סיווג','עובי','רוחב','אורך','מחיר','מחיר למטר','ספק']
+                       : ['Type','Classification','Thickness','Width','Length','Price','Price per meter','Supplier'];
+        const units = he ? ['', '', 'מ״מ', 'מ״מ', 'ס״מ', '€', `${he?'€':''}`, '']
+                         : ['', '', 'mm', 'mm', 'cm', '€', '€', ''];
+        inventoryRows = [hdr, units];
+        inventoryHeaders = hdr.slice();
+        inventoryUnits = units.slice();
+        inventoryData = [];
+        saveData('inventoryRows', inventoryRows);
+        saveData('inventoryHeaders', inventoryHeaders);
+        saveData('inventoryUnits', inventoryUnits);
+        saveData('inventoryData', inventoryData);
+        // Ensure currency unit reflects the button
+        const sym = document.getElementById('btn-currency')?.textContent?.trim() || '€';
+        inventoryPriceCurrencyUnit = sym;
+        saveData('inventoryPriceCurrencyUnit', inventoryPriceCurrencyUnit);
+    }
+    // Show a new editable row at the top
     showNewInventoryRow = true;
     renderInventoryTable();
 });
@@ -1880,7 +1946,7 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                     #results-area, #results-area * { background-image: none !important; filter: none !important; }
                     .db-table{width:100%;border-collapse:collapse}
                     .db-table th,.db-table td{padding:8px;border:1px solid #ddd;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
-                    .diagram{width:100%;height:auto}
+                    .diagram{width:100%;height:auto;border:none !important;border-radius:0 !important;padding:12px !important}
                     img{max-width:100%;height:auto}
                     h2{font-size:22px;margin:10px 0 14px}
                     h3{font-size:18px;margin:8px 0 10px}
@@ -1944,8 +2010,8 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                 // Increase spacing between sections/tables for nicer gaps in PDF
                         const style2 = document.createElement('style');
                 style2.textContent = `
-                            .results-section { margin-bottom: 36px !important; }
-                            table { margin: 0 0 22px 0 !important; }
+                            .results-section { margin: 0 0 42px 0 !important; }
+                            table { margin: 0 0 24px 0 !important; }
                 `;
                 temp.appendChild(style2);
                 // Mark local images as CORS-anonymous and skip any remote images during capture
@@ -2003,7 +2069,7 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
 
         // Scale image to fit width with preserved ratio and paginate by slicing the canvas
         const imgWpx = canvas.width, imgHpx = canvas.height;
-        const margin = 10; // mm
+    const margin = 14; // mm, larger to avoid clipping
         const pdfW = pageW - margin * 2;
         const pxPerMm = imgWpx / pdfW; // how many pixels per mm at this width
         const pageContentHpx = (pageH - margin * 2) * pxPerMm; // max pixels per page height
