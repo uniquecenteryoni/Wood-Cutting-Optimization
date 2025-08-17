@@ -595,6 +595,11 @@ function setInventoryFromArray2D(arr) {
         area.setAttribute('aria-hidden','false');
         toggleDbBtn.textContent = (language === 'he' ? 'הסתר מאגר עצים' : 'Hide Inventory');
         toggleDbBtn.setAttribute('aria-expanded','true');
+        // Scroll the DB block into view so title/buttons are on top and 50% viewport shows table rows
+        try {
+            const blockDb = document.getElementById('block-db');
+            blockDb && blockDb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch(_){ }
     }
 }
 
@@ -1578,7 +1583,10 @@ function renderResults(results) {
             <div class="results-section"><div class="x-scroll">${diagrams()}</div></div>
         `;
     // Ensure all horizontal wrappers start at x=0
-    try { area.querySelectorAll('.x-scroll').forEach(sc => sc.scrollLeft = 0); } catch(_) {}
+    try {
+        // Results tables are LTR; keep horizontal scroll anchored at start
+        area.querySelectorAll('.x-scroll').forEach(sc => { sc.scrollLeft = 0; });
+    } catch(_) {}
 
         // Show calculation errors in a full-screen modal with an OK button
         try {
@@ -1901,7 +1909,11 @@ if (toggleDbBtn) {
                 const wrap = document.getElementById('db-table-wrap');
                 if (wrap) scrollToStart(wrap, dir);
             } catch(_) {}
-            // Do not auto-scroll; keep user's scroll position stable
+            // Bring DB block to top so title + buttons are visible and 50% viewport shows table rows
+            try {
+                const blockDb = document.getElementById('block-db');
+                blockDb && blockDb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch(_){ }
         }
     });
 }
@@ -1945,6 +1957,11 @@ if (addDbRowBtn) addDbRowBtn.addEventListener('click', () => {
     // Show a new editable row at the top
     showNewInventoryRow = true;
     renderInventoryTable();
+    // Ensure user sees the DB section with 50% viewport allocated to the table area
+    try {
+        const blockDb = document.getElementById('block-db');
+        blockDb && blockDb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch(_){ }
 });
 
 const fileInput = document.getElementById('file-input');

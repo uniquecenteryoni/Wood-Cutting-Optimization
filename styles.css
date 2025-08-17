@@ -17,6 +17,8 @@
 }
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#1e1e1e;margin:0;padding:0;background:var(--bg)}
+/* Reserve scrollbar gutter to avoid layout shift when vertical scrollbar toggles */
+html, body{ scrollbar-gutter: stable both-edges }
 /* Better mobile tap behavior */
 body{-webkit-tap-highlight-color: transparent}
 h1,h2,h3{font-family:'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial}
@@ -170,7 +172,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .db-table tr.new-row td[contenteditable]:empty::before{ content:attr(data-ph); color:#9aa39a }
 .db-table thead tr:first-child th{background:var(--head1)}
 .db-table thead tr:nth-child(2) th{background:var(--head2)}
-.db-area{overflow-y:auto; overflow-x:hidden; max-height:60vh;padding-top:6px; scrollbar-gutter: stable both-edges}
+.db-area{overflow-y:auto; overflow-x:hidden; height:50vh; max-height:50vh; padding-top:6px; scrollbar-gutter: stable both-edges; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain}
 .db-area #db-table-wrap:empty{display:block;min-height:0;padding:0;border:none}
 .db-table thead tr:first-child th{position:sticky;top:0;z-index:2}
 .db-table thead tr:nth-child(2) th{position:sticky;top:34px;z-index:1}
@@ -184,7 +186,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .file-btn{display:inline-flex;align-items:center;gap:8px}
 .file-btn span{font:inherit}
 .req-row .small{font-size:12px;color:var(--muted)}
-.results-section{margin-top:12px}
+.results-section{margin-top:24px}
 .diagram{border:none;border-radius:0;padding:8px;background:#fff}
 .diagram text{pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -271,10 +273,13 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 #block-db .card-head h2, #block-res h2{font-size:36px}
 /* Normalize Block 3 title spacing and alignment */
 #block-res h2{margin:0 auto}
-.results-section > h3{margin:0 auto; text-align:center}
-.results-section > .x-scroll{margin:0;}
-#block-res h2 + #results-area{margin-top:12px}
-#results-area{max-width:100%; overflow:visible}
+.results-section > h3{margin:0 auto; text-align:center; font-size:22px}
+.results-section > .x-scroll{margin:10px 0 0 0;}
+#results-area .results-section + .results-section{margin-top:32px}
+#block-res h2 + #results-area{margin-top:16px}
+#results-area{max-width:100%; overflow:visible; padding-left:clamp(12px, 5vw, 56px); padding-right:clamp(12px, 5vw, 56px)}
+.container #block-res{ overflow-x:hidden }
+#results-area{ overflow-x:hidden }
 .no-results{margin:0 auto; text-align:center; display:block; padding:8px 12px}
 /* Force small-controls to the physical left in RTL */
 html[dir="rtl"] #block-req .small-controls{justify-content:flex-end}
