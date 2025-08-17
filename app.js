@@ -1607,6 +1607,17 @@ function renderResults(results) {
     if (dsLabelsSwitch) dsLabelsSwitch.addEventListener('click', () => { displaySettings.showPieceLabels = !displaySettings.showPieceLabels; saveData('displaySettings', displaySettings); reRender(); });
 }
 
+// Center Block 1 title and actions when there are no requirement rows
+function updateReqEmptyState() {
+    try {
+        const block = document.getElementById('block-req');
+        const list = document.getElementById('requirements-list');
+        if (!block || !list) return;
+        const hasRows = !!list.querySelector('.req-row');
+        block.classList.toggle('center-empty', !hasRows);
+    } catch (_) {}
+}
+
 // הוספת שורת דרישה לבלוק הדרישות
 function addRequirementRow() {
         const list = document.getElementById('requirements-list');
@@ -1630,9 +1641,10 @@ function addRequirementRow() {
             <input data-field="qty" type="number" min="1" placeholder="${language === 'he' ? 'כמות' : 'Qty'}" />
             <button class="btn small btn-remove" title="Remove">✖</button>
         `;
-        const removeBtn = row.querySelector('button');
-        if (removeBtn) removeBtn.addEventListener('click', () => row.remove());
-        list.appendChild(row);
+    const removeBtn = row.querySelector('button');
+    if (removeBtn) removeBtn.addEventListener('click', () => { row.remove(); try { updateReqEmptyState(); } catch(_){} });
+    list.appendChild(row);
+    try { updateReqEmptyState(); } catch(_){}
 }
 
 // אירועים (מותאמים ל-HTML הנוכחי, עם בדיקות קיום אלמנטים)
@@ -1716,6 +1728,9 @@ if (addReqBtn) {
         try { addRequirementRow(); } finally { setTimeout(()=>{ window.__addingReq = false; }, 0); }
     }, { capture: true });
 }
+
+// Initialize centered empty-state on load
+try { updateReqEmptyState(); } catch(_){}
 
 // תוצאה בסיסית: הדגמת חישוב 1D (מינימלי) ותצוגה
 function gatherRequirements() {

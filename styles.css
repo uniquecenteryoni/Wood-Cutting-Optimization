@@ -235,6 +235,19 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 #block-req .actions.actions-center{justify-content:center}
 #block-req .small-controls{justify-content:flex-start;flex-wrap:wrap; align-items:flex-start}
 #block-req .small-controls .inline{justify-content:flex-start}
+#block-req.center-empty{display:flex; flex-direction:column; justify-content:center; min-height:360px; position:relative}
+#block-req.center-empty .card-head{margin:0 auto 12px; text-align:center; align-items:flex-start; position:static}
+#block-req.center-empty .card-head h2{margin:0 auto}
+/* Pin controls to block edges (not the centered head) */
+#block-req.center-empty .req-name{position:absolute; right:3px; left:auto}
+#block-req.center-empty #saw-settings-btn{position:absolute; left:3px; right:auto}
+#block-req.center-empty .actions.actions-center{justify-content:center; margin-top:36px}
+@media(min-width:701px){
+	#block-req.center-empty .req-name{ top:-45px }
+	#block-req.center-empty #saw-settings-btn{ top:-45px }
+}
+#block-req.center-empty #requirements-list{display:none}
+#block-req.center-empty .actions.actions-center{justify-content:center; margin-top:16px}
 #block-db .card-head h2, #block-res h2{font-size:36px}
 /* Normalize Block 3 title spacing and alignment */
 #block-res h2{margin:0 auto}
@@ -385,6 +398,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .plan-card .thumb .dot.active{background:#fff}
 /* Ensure 3-step carousel frames overlay each other */
 .plan-card .thumb .step{position:absolute; inset:0; transition:opacity .25s ease}
+
+/* Desktop: final placement override for Block 1 header controls (wins over earlier top:0 rules) */
+@media(min-width:701px){
+	#block-req .card-head .req-name{ top:-45px; right:3px; }
+	#block-req #saw-settings-btn{ top:-45px; }
+}
+
+/* Final header cleanup: keep only name field and saw icon visible in Block 1 */
+#block-req #project-name-ok{ display:none !important }
+#block-req #saw-popover{ display:none !important }
 /* RTL: make the first dot appear on the right */
 html[dir="rtl"] .plan-card .thumb .dots{flex-direction:row-reverse}
 /* Slide transition between images on tap */
@@ -405,9 +428,11 @@ html[dir="rtl"] .plan-card .thumb .dots{flex-direction:row-reverse}
 /* Desktop: pin saw icon and project name under the top separator, keep title at standard offset */
 @media(min-width:701px){
 	#block-req .card-head{align-items:flex-start}
-	/* Card has 56px top padding; keep controls above the title and around 3px below the border */
-	.card-head .req-name{top:-53px}
-	#saw-settings-btn{top:-53px}
+	/* Card has 56px top padding; place controls near the top border */
+	.card-head .req-name{top:-56px}
+	#saw-settings-btn{top:-56px}
+	/* Hide the save button for project name on desktop */
+	.card-head .req-name #project-name-ok{display:none !important}
 }
 
 /* DB buttons sizing: make top row button span width of bottom controls */
