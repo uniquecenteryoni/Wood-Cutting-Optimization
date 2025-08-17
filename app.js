@@ -1555,10 +1555,10 @@ function renderResults(results) {
     const title2 = language==='he' ? 'עלויות' : 'Costs';
     const title3 = language==='he' ? 'עצים לרכישה' : 'Items to Purchase';
                 area.innerHTML = `
-            <div class="results-section"><h3>${title1}</h3>${table1()}</div>
-            <div class="results-section"><h3>${title2}</h3>${table2()}</div>
-            <div class="results-section"><h3>${title3}</h3>${table3()}</div>
-            <div class="results-section">${diagrams()}</div>
+            <div class="results-section"><h3>${title1}</h3><div class="x-scroll">${table1()}</div></div>
+            <div class="results-section"><h3>${title2}</h3><div class="x-scroll">${table2()}</div></div>
+            <div class="results-section"><h3>${title3}</h3><div class="x-scroll">${table3()}</div></div>
+            <div class="results-section"><div class="x-scroll">${diagrams()}</div></div>
         `;
 
         // Show calculation errors in a full-screen modal with an OK button
@@ -2370,16 +2370,19 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
     }
 });
 
-// ===== Mobile horizontal pan lock: only table can pan sideways when DB is open =====
+// ===== Mobile horizontal pan lock: allow pan-x רק באזורים מותרים (מאגר, תוצאות, דיאגרמות) =====
 (function(){
     let enabled = false;
-    let startX = 0, startY = 0, startedInsideTable = false;
-    const isInsideTable = (el) => !!el && !!el.closest && !!el.closest('#db-table-wrap');
+    let startX = 0, startY = 0, startedInsideAllowed = false;
+    const isInsideAllowed = (el) => {
+        if (!el || !el.closest) return false;
+        return !!(el.closest('#db-table-wrap') || el.closest('#results-area') || el.closest('.diagram'));
+    };
     const onStart = (e) => {
         const t = e.touches && e.touches[0];
         if (!t) return;
         startX = t.clientX; startY = t.clientY;
-        startedInsideTable = isInsideTable(e.target);
+        startedInsideAllowed = isInsideAllowed(e.target);
     };
     const onMove = (e) => {
         if (!enabled) return;
@@ -2387,8 +2390,8 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
         if (!t) return;
         const dx = t.clientX - startX;
         const dy = t.clientY - startY;
-        // If gesture is horizontal and did not start inside the table, block it
-        if (!startedInsideTable && Math.abs(dx) > Math.abs(dy) + 2) {
+        // מחסום: מחווה אופקית שמתחילה מחוץ לאזור מותר — מבוטלת
+        if (!startedInsideAllowed && Math.abs(dx) > Math.abs(dy) + 2) {
             try { e.preventDefault(); } catch(_){}
         }
     };
@@ -2403,24 +2406,8 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
             document.removeEventListener('touchmove', onMove, { passive: false });
         }
     }
-    function dbVisible(){
-        const area = document.getElementById('db-area');
-        return !!area && !area.classList.contains('hidden');
-    }
-    function updateLock(){ setLock(dbVisible()); }
-    // Hook into existing DB toggle flows
-    const toggleBtn = document.getElementById('toggle-db');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => { setTimeout(updateLock, 0); });
-    }
-    // Also update after inventory renders (open via other flows)
-    const wrap = document.getElementById('db-area');
-    if (wrap) {
-        const mo = new MutationObserver(() => updateLock());
-        mo.observe(wrap, { attributes:true, attributeFilter:['class'] });
-    }
-    // Initial state
-    updateLock();
+    // תמיד פעיל — מרשה pan-x רק בתוך האזורים המותרים
+    setLock(true);
 })();
 
 // חישוב מחיר למטר תוך כדי עריכה (לייב) עבור שורות במצב עריכה
