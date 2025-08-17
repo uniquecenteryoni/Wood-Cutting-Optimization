@@ -1878,6 +1878,8 @@ if (toggleDbBtn) {
         if (!nowHidden) {
             // Always render to ensure fresh content
             try { renderInventoryTable(); } catch(e){}
+            // Reset scroll position to start on open
+            try { document.querySelectorAll('#db-table-wrap, #db-table-wrap .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch(_) {}
             // Do not auto-scroll; keep user's scroll position stable
         }
     });
@@ -2464,6 +2466,7 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
         renderInventoryTable();
         refreshRequirementTypeOptions();
         showDbStatus(language === 'he' ? 'מאגר הנתונים נטען מהדפדפן' : 'Inventory restored from browser');
+    try { document.querySelectorAll('#db-table-wrap, #db-table-wrap .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch(_) {}
     }
 })();
 });

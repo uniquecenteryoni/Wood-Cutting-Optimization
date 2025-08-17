@@ -34,7 +34,7 @@ html[dir="rtl"] body{ font-size: 16px }
 html[dir="ltr"] body{ text-align:left }
 html[dir="rtl"] .container, html[dir="rtl"] .card{ text-align:right }
 html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
-.topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative;min-height:128px}
+.topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 8px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative;min-height:128px}
 .site-title{margin:0 auto;text-align:center;font-size:28px;background:transparent;padding:6px 12px;border-radius:10px;display:inline-block}
 .top-left{position:absolute;left:14px;top:0;bottom:auto;display:flex;align-items:center;margin-top:6px}
 .top-center{position:absolute;left:50%;top:6px;bottom:6px;transform:translateX(-50%);display:flex;align-items:center}
@@ -52,7 +52,7 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .container{max-width:100%;width:100%;margin:0 auto;padding:0;display:grid;grid-template-columns:1fr;gap:0}
 .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.04);border:1px solid var(--border); max-width:100%}
 /* Full-bleed page sections: only top-level cards under .container become flat bands */
-.container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:56px 16px}
+.container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:56px 12px}
 .container > .card + .card{border-top:1px solid var(--border)}
 .container > #block-req.card:hover,
 .container > #block-db.card:hover,
@@ -131,6 +131,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 	#requirements-list .req-row > *:nth-child(6){grid-column:2/3; justify-self:end}
 }
 .db-table{width:max-content; min-width:100%; border-collapse:collapse; table-layout:auto}
+.db-table{direction:ltr}
 .db-table th,.db-table td{padding:8px;border:1px solid var(--border);text-align:center;font:inherit; white-space:nowrap}
 .db-table thead th{font-size:16px}
 .db-table tbody tr{transition:background-color .12s ease}
@@ -316,7 +317,8 @@ html[dir="rtl"] #block-db .db-status{left:16px;right:auto;text-align:left}
 #block-res .res-modal-actions{display:flex;justify-content:center;margin-top:10px}
 
 /* אזורי גלילה אופקית מבודדים (טבלאות/דיאגרמות בתוצאות) */
-.x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; direction:ltr}
+.x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scrollbar-gutter: stable both-edges}
+.x-scroll{overflow-anchor: none}
 
 /* Add wood button pastel red style */
 .btn.add-wood{background:#ffe5e5;border-color:#f5c2c2;color:#000; text-align:center; font-size:17px}
@@ -382,7 +384,13 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 	#db-table-wrap{overflow-x:auto}
 }
 /* Ensure DB table can scroll horizontally without affecting the page */
-#db-table-wrap{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x; direction:ltr}
+#db-table-wrap{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x; scrollbar-gutter: stable both-edges}
+#db-table-wrap{overflow-anchor: none}
+
+/* Make main blocks edge-to-edge on mobile (no side gutters under the header) */
+@media(max-width:900px){
+	.container > .card{ padding-left:0; padding-right:0 }
+}
 .db-area{overflow:auto}
 @media(max-width:520px){
 	#requirements-list .req-row{grid-template-columns:1fr}
