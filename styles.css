@@ -271,6 +271,8 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 #block-db .card-head h2, #block-res h2{font-size:36px}
 /* Normalize Block 3 title spacing and alignment */
 #block-res h2{margin:0 auto}
+.results-section > h3{margin:0 auto; text-align:center}
+.results-section > .x-scroll{margin:0;}
 #block-res h2 + #results-area{margin-top:12px}
 /* Force small-controls to the physical left in RTL */
 html[dir="rtl"] #block-req .small-controls{justify-content:flex-end}

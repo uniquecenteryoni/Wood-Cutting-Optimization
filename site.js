@@ -77,6 +77,13 @@
   try { applyDir(); } catch {}
 
   window.addEventListener('DOMContentLoaded', ()=>{
+    // Disable initial compact scaling: it caused side gutters on first load
+    try {
+      sessionStorage.setItem('initialCompactDone','1');
+      document.body.classList.remove('initial-compact','initial-compact-tight');
+      const mainEl = document.querySelector('main.container');
+      if (mainEl) { mainEl.style.transform=''; mainEl.style.transformOrigin=''; }
+    } catch{}
     // Defensive: remove any stray JSON printed after the footer (e.g., if a JSON script was mis-parsed)
     try {
       const footer = document.querySelector('footer.footer');
@@ -107,7 +114,7 @@
       const key='initialCompactDone';
     const path = (location.pathname || '').toLowerCase();
     const isIndex = path.endsWith('/index.html') || path.endsWith('index.html') || /\/$/.test(path);
-      if (isIndex && !sessionStorage.getItem(key)) {
+      if (false && isIndex && !sessionStorage.getItem(key)) {
         document.body.classList.add('initial-compact');
         // If viewport height is very small, add an extra-tight mode
         try {
