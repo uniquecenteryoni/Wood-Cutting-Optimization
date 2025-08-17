@@ -371,11 +371,15 @@ body.initial-compact-tight h2{font-size:28px}
 
 /* Mobile enhancements: safer text scaling, fluid diagrams, table scroll, and narrow stacking */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.no-x-scroll, html, body{max-width:100%; overflow-x:hidden}
 .diagram svg{max-width:100%;height:auto;display:block}
 @media(max-width:640px){
 	.db-area{-webkit-overflow-scrolling:touch}
 	#db-table-wrap{overflow-x:auto}
 }
+/* Ensure DB table can scroll horizontally without affecting the page */
+#db-table-wrap{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain}
+.db-area{overflow:auto}
 @media(max-width:520px){
 	#requirements-list .req-row{grid-template-columns:1fr}
 	#requirements-list .req-row > *{grid-column:1/-1 !important; justify-self:stretch}
