@@ -73,23 +73,26 @@ function planCard(p) {
     const videoId = 'il4dtzUaMwM';
     const videoURL = `https://www.youtube.com/embed/${videoId}`;
     imgHTML = `
-      <div class="thumb" aria-label="${p.title[lang]}" data-carousel="montessori">
+  <div class="thumb" aria-label="${p.title[lang]}" data-carousel="montessori">
         <div class="carousel-frame" data-step="0" style="position:absolute; inset:0;">
           ${primary ? `<img class="thumb-img step step-0" src="${primary}" alt="${p.title[lang]}" loading="lazy" style="opacity:1" />` : ''}
           ${secondary ? `<img class="thumb-img step step-1" src="${secondary}" alt="${p.title[lang]} – מצב 2" loading="lazy" style="opacity:0" />` : ''}
           <iframe class="thumb-img step step-2" src="${videoURL}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="opacity:0; width:100%; height:100%"></iframe>
         </div>
-        <div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span><span class="dot"></span></div>
+  <div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span><span class="dot"></span></div>
+  <button class="arrow left" type="button" aria-label="prev">‹</button>
+  <button class="arrow right" type="button" aria-label="next">›</button>
       </div>`;
   } else {
     const imgs = [];
     if (primary) imgs.push(primary);
     if (secondary) imgs.push(secondary);
     imgHTML = imgs.length
-      ? `<div class="thumb" aria-label="${p.title[lang]}">`+
+    ? `<div class="thumb" aria-label="${p.title[lang]}">`+
           `<img class="thumb-img primary" src="${imgs[0]}" alt="${p.title[lang]}" loading="lazy" />`+
           (imgs[1] ? `<img class="thumb-img secondary" src="${imgs[1]}" alt="${p.title[lang]} – תכנית בנייה" loading="lazy" onerror="this.remove()" />` : '')+
           (imgs[1] ? `<div class="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span></div>` : '')+
+      (imgs[1] ? `<button class="arrow left" type="button" aria-label="prev">‹</button><button class="arrow right" type="button" aria-label="next">›</button>` : '')+
         `</div>`
       : `<div class="thumb">${p.title[lang].substring(0, 2)}</div>`;
   }
@@ -149,7 +152,7 @@ window.addEventListener('DOMContentLoaded', () => {
   render(plans);
   input.addEventListener('input', () => render(searchPlans(input.value)));
 
-  // Mobile: tap-to-toggle images with dots indicator (also works on desktop click)
+  // Mobile + Desktop: add arrows, swipe, and click-to-open behaviors
   const enableThumbToggles = () => {
     const cards = Array.from(document.querySelectorAll('.plan-card .thumb'));
     cards.forEach(thumb => {
@@ -164,7 +167,32 @@ window.addEventListener('DOMContentLoaded', () => {
           dots.forEach((d, i) => d.classList.toggle('active', i === step));
         };
         sync();
-        thumb.addEventListener('click', () => { step = (step + 1) % 3; sync(); });
+        // Desktop arrows
+        const prevBtn = thumb.querySelector('.arrow.left');
+        const nextBtn = thumb.querySelector('.arrow.right');
+        if (prevBtn) prevBtn.addEventListener('click', (e)=>{ e.stopPropagation(); step = (step + 2) % 3; sync(); });
+        if (nextBtn) nextBtn.addEventListener('click', (e)=>{ e.stopPropagation(); step = (step + 1) % 3; sync(); });
+        // Center click opens in new tab (image or video)
+        thumb.addEventListener('click', () => {
+          const cur = thumb.querySelector(`.step-${step}`);
+          const img = cur?.tagName === 'IMG' ? cur.getAttribute('src') : null;
+          const url = img || (cur?.tagName === 'IFRAME' ? cur.getAttribute('src') : null);
+          if (url) window.open(url, '_blank', 'noopener');
+        });
+        // Touch swipe for mobile
+        let x0 = null; let y0 = null; let moved = false;
+        const onTouchStart = (e)=>{ const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; moved=false; };
+        const onTouchMove = (e)=>{ if (x0===null) return; const t=e.touches[0]; const dx=t.clientX-x0; const dy=t.clientY-y0; if (Math.abs(dx)>10 && Math.abs(dx)>Math.abs(dy)) { moved=true; e.preventDefault(); } };
+  const onTouchEnd = (e)=>{ if (x0===null) return; if (moved){ if (x0 !== null){ const dx = (e.changedTouches?.[0]?.clientX ?? x0) - x0; if (dx < -20) { step=(step+1)%3; } else if (dx > 20) { step=(step+2)%3; } sync(); } } else { // tap opens
+            const cur = thumb.querySelector(`.step-${step}`);
+            const img = cur?.tagName === 'IMG' ? cur.getAttribute('src') : null;
+            const url = img || (cur?.tagName === 'IFRAME' ? cur.getAttribute('src') : null);
+            if (url) window.open(url, '_blank', 'noopener');
+        }
+          x0=null; y0=null; moved=false; };
+        thumb.addEventListener('touchstart', onTouchStart, {passive:true});
+        thumb.addEventListener('touchmove', onTouchMove, {passive:false});
+        thumb.addEventListener('touchend', onTouchEnd, {passive:true});
         // Disable hover flips for this card
         thumb.classList.add('no-hover');
       } else {
@@ -184,7 +212,25 @@ window.addEventListener('DOMContentLoaded', () => {
           updateDots();
         };
         updateDots();
-        thumb.addEventListener('click', ()=>{ show(!showingSecondary); });
+        // Arrows
+        const prevBtn = thumb.querySelector('.arrow.left');
+        const nextBtn = thumb.querySelector('.arrow.right');
+        if (prevBtn) prevBtn.addEventListener('click', (e)=>{ e.stopPropagation(); show(false); });
+        if (nextBtn) nextBtn.addEventListener('click', (e)=>{ e.stopPropagation(); show(true); });
+        // Center click opens image in new tab
+        thumb.addEventListener('click', () => {
+          const curImg = showingSecondary ? secondary : primary;
+          const url = curImg?.getAttribute('src');
+          if (url) window.open(url, '_blank', 'noopener');
+        });
+        // Touch swipe
+        let x0 = null; let y0=null; let moved=false;
+        const onTouchStart = (e)=>{ const t=e.touches[0]; x0=t.clientX; y0=t.clientY; moved=false; };
+        const onTouchMove = (e)=>{ if (x0===null) return; const t=e.touches[0]; const dx=t.clientX-x0; const dy=t.clientY-y0; if (Math.abs(dx)>10 && Math.abs(dx)>Math.abs(dy)) { moved=true; e.preventDefault(); } };
+        const onTouchEnd = (e)=>{ if (x0===null) return; if (moved){ const dx=(e.changedTouches?.[0]?.clientX ?? x0) - x0; if (dx < -20) { show(true); } else if (dx > 20) { show(false); } } else { const curImg = showingSecondary ? secondary : primary; const url = curImg?.getAttribute('src'); if (url) window.open(url, '_blank', 'noopener'); } x0=null; y0=null; moved=false; };
+        thumb.addEventListener('touchstart', onTouchStart, {passive:true});
+        thumb.addEventListener('touchmove', onTouchMove, {passive:false});
+        thumb.addEventListener('touchend', onTouchEnd, {passive:true});
       }
     });
   };

@@ -471,7 +471,8 @@ function renderInventoryTable() {
                 const opts = language === 'he' ? ['קורה','פלטה'] : ['Beam','Plate'];
                 return `<td data-col="${i}"><select class="inv-classification">${opts.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></td>`;
             }
-            return `<td contenteditable="true" data-col="${i}"></td>`;
+            const ph = (inventoryHeaders[i] || '').toString();
+            return `<td contenteditable="true" data-ph="${ph}" data-col="${i}"></td>`;
         }).join('')}<td>
             <button class="btn btn-save-new">${translations[language]?.save || (language === 'he' ? 'שמור' : 'save')}</button>
             <button class="btn btn-cancel-new">${language === 'he' ? 'בטל' : 'Cancel'}</button>
@@ -519,7 +520,8 @@ function renderInventoryTable() {
                <button class="btn btn-cancel" data-row="${rowIndex}">${language === 'he' ? 'בטל' : 'Cancel'}</button>`
             : `<button class="btn btn-edit" data-row="${rowIndex}" title="${language === 'he' ? 'עריכה' : 'Edit'}">✏️</button>
                <button class="btn btn-del" data-row="${rowIndex}" title="${language === 'he' ? 'הסר' : 'Delete'}">✖</button>`;
-        return `<tr>${tds}<td class="actions-cell">${actions}</td></tr>`;
+        const trClass = editingRows.has(rowIndex) ? ' class="editing"' : '';
+        return `<tr${trClass}>${tds}<td class="actions-cell">${actions}</td></tr>`;
     }).join('');
     wrap.innerHTML = `
       <table class="db-table">
