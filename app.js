@@ -529,6 +529,8 @@ function renderInventoryTable() {
         <tbody>${tbody}</tbody>
       </table>
     `;
+    // Reset scroll to the start to avoid RTL initial offset on mobile
+    try { wrap.scrollLeft = 0; } catch(_) {}
 }
 
 // עדכון כל רשימות הסוגים בדרישות
@@ -1554,12 +1556,14 @@ function renderResults(results) {
     const title1 = language==='he' ? 'חיתוכים' : 'Cuts';
     const title2 = language==='he' ? 'עלויות' : 'Costs';
     const title3 = language==='he' ? 'עצים לרכישה' : 'Items to Purchase';
-                area.innerHTML = `
+        area.innerHTML = `
             <div class="results-section"><h3>${title1}</h3><div class="x-scroll">${table1()}</div></div>
             <div class="results-section"><h3>${title2}</h3><div class="x-scroll">${table2()}</div></div>
             <div class="results-section"><h3>${title3}</h3><div class="x-scroll">${table3()}</div></div>
             <div class="results-section"><div class="x-scroll">${diagrams()}</div></div>
         `;
+    // Ensure all horizontal wrappers start at x=0
+    try { area.querySelectorAll('.x-scroll').forEach(sc => sc.scrollLeft = 0); } catch(_) {}
 
         // Show calculation errors in a full-screen modal with an OK button
         try {
@@ -2370,13 +2374,14 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
     }
 });
 
-// ===== Mobile horizontal pan lock: allow pan-x רק באזורים מותרים (מאגר, תוצאות, דיאגרמות) =====
+// ===== Mobile horizontal pan lock: allow pan-x רק באזורים מותרים (מאגר, תוצאות בתוך .x-scroll, דיאגרמות) =====
 (function(){
     let enabled = false;
     let startX = 0, startY = 0, startedInsideAllowed = false;
     const isInsideAllowed = (el) => {
         if (!el || !el.closest) return false;
-        return !!(el.closest('#db-table-wrap') || el.closest('#results-area') || el.closest('.diagram'));
+    // Allow only inside explicit horizontal scroll regions
+    return !!(el.closest('#db-table-wrap') || el.closest('#results-area .x-scroll') || el.closest('.diagram'));
     };
     const onStart = (e) => {
         const t = e.touches && e.touches[0];
