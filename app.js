@@ -2370,6 +2370,59 @@ if (dbWrap) dbWrap.addEventListener('click', (e) => {
     }
 });
 
+// ===== Mobile horizontal pan lock: only table can pan sideways when DB is open =====
+(function(){
+    let enabled = false;
+    let startX = 0, startY = 0, startedInsideTable = false;
+    const isInsideTable = (el) => !!el && !!el.closest && !!el.closest('#db-table-wrap');
+    const onStart = (e) => {
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        startX = t.clientX; startY = t.clientY;
+        startedInsideTable = isInsideTable(e.target);
+    };
+    const onMove = (e) => {
+        if (!enabled) return;
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        // If gesture is horizontal and did not start inside the table, block it
+        if (!startedInsideTable && Math.abs(dx) > Math.abs(dy) + 2) {
+            try { e.preventDefault(); } catch(_){}
+        }
+    };
+    function setLock(on){
+        if (on === enabled) return;
+        enabled = on;
+        if (on) {
+            document.addEventListener('touchstart', onStart, { passive: true });
+            document.addEventListener('touchmove', onMove, { passive: false });
+        } else {
+            document.removeEventListener('touchstart', onStart, { passive: true });
+            document.removeEventListener('touchmove', onMove, { passive: false });
+        }
+    }
+    function dbVisible(){
+        const area = document.getElementById('db-area');
+        return !!area && !area.classList.contains('hidden');
+    }
+    function updateLock(){ setLock(dbVisible()); }
+    // Hook into existing DB toggle flows
+    const toggleBtn = document.getElementById('toggle-db');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => { setTimeout(updateLock, 0); });
+    }
+    // Also update after inventory renders (open via other flows)
+    const wrap = document.getElementById('db-area');
+    if (wrap) {
+        const mo = new MutationObserver(() => updateLock());
+        mo.observe(wrap, { attributes:true, attributeFilter:['class'] });
+    }
+    // Initial state
+    updateLock();
+})();
+
 // חישוב מחיר למטר תוך כדי עריכה (לייב) עבור שורות במצב עריכה
 if (dbWrap) dbWrap.addEventListener('input', (e) => {
     const td = e.target.closest('td[contenteditable="true"]');
