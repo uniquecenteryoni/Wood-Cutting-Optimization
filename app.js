@@ -25,6 +25,8 @@ displaySettings = {
 };
 // מזהה ייחודי לדיאגרמות SVG כדי למנוע התנגשויות id בין דיאגרמות שונות
 let svgIdCounter = 0;
+// Global helper: quick text width approximation used by SVG label fit checks
+const approxTextWidthPlate = (txt, fs) => (String(txt||'').length * fs * 0.6);
 // מילון תרגומים
 const translations = {
     he: {
@@ -943,6 +945,77 @@ function packPlatesForGroup(groupKey, piecesMM, kerfMM) {
         return { placed, freeRects };
     }
 
+    // פריסת מדפים (Shelves) להשגת פחת מלבני יחיד מקסימלי כאשר הכל נכנס
+    function tryShelfMaxWaste() {
+        const PW = chosen.Wmm, PH = chosen.Hmm;
+        const tol = 1; // מ"מ
+        if (!piecesMM || !piecesMM.length) return null;
+        // בדיקת שטח כיסוי (כולל קירוב kerf): אם גדול מהפלטה, אין טעם לנסות
+        const totalArea = piecesMM.reduce((a,p)=> a + p.w*p.h, 0);
+        if (totalArea - tol > PW*PH) return null;
+        // בחר שתי וריאציות: "שורות" (גובה מינימלי לכל חלק) ו"עמודות" (רוחב מינימלי לכל חלק)
+        function buildShelfRows(useMinAsHeight) {
+            // אוריינטציה לכל חלק: גובה=min או רוחב=min
+            const oriented = piecesMM.map(p => {
+                const minD = Math.min(p.w, p.h);
+                const maxD = Math.max(p.w, p.h);
+                return useMinAsHeight ? {w: maxD, h: minD, src: p} : {w: minD, h: maxD, src: p};
+            });
+            // מיין מהגדול לקטן כדי למלא רצפים צפופים
+            const items = oriented.slice().sort((a,b)=> (useMinAsHeight ? (b.h - a.h) || (b.w - a.w) : (b.w - a.w) || (b.h - a.h)));
+            const rows = [];
+            let curRow = { items: [], rowH: 0, usedW: 0 };
+            function canPlaceInRow(r, itm) {
+                const extraKerf = r.items.length>0 ? kerfMM : 0;
+                return (r.usedW + extraKerf + itm.w) <= PW + tol;
+            }
+            for (const it of items) {
+                if (curRow.items.length===0 || canPlaceInRow(curRow, it)) {
+                    const extraKerf = curRow.items.length>0 ? kerfMM : 0;
+                    curRow.items.push(it);
+                    curRow.usedW += extraKerf + it.w;
+                    curRow.rowH = Math.max(curRow.rowH, it.h);
+                } else {
+                    rows.push(curRow);
+                    curRow = { items: [it], rowH: it.h, usedW: it.w };
+                }
+            }
+            if (curRow.items.length) rows.push(curRow);
+            // חשב גובה כולל עם kerf בין שורות
+            const totalH = rows.reduce((a,r)=> a + r.rowH, 0) + kerfMM * Math.max(0, rows.length-1);
+            if (totalH - tol > PH) return null; // לא נכנס
+            // בנה מיקומים משמאל לימין, למעלה למטה
+            const placed = [];
+            let y = 0;
+            for (const r of rows) {
+                let x = 0;
+                for (let i=0;i<r.items.length;i++) {
+                    const it = r.items[i];
+                    if (i>0) x += kerfMM;
+                    placed.push({ x, y, w: it.w, h: it.h, src: it.src });
+                    x += it.w;
+                }
+                y += r.rowH + kerfMM;
+            }
+            y -= kerfMM; // הסר kerf האחרון
+            const freeRects = (PH - y > 0) ? [{ x: 0, y, w: PW, h: PH - y }] : [];
+            return { placed, freeRects };
+        }
+
+        // נסה וריאציות והחזר את זו שמייצרת מלבן פחת הגדול ביותר כאשר כל החלקים שובצו
+        const variants = [ buildShelfRows(true), buildShelfRows(false) ].filter(Boolean);
+        if (!variants.length) return null;
+        // ודא שמספר החלקים שובצו במלואם
+        const full = variants.filter(v => v.placed.length === piecesMM.length);
+        if (!full.length) return null;
+        full.sort((a,b)=> {
+            const areaA = a.freeRects.reduce((m,r)=> Math.max(m, Math.max(0,r.w)*Math.max(0,r.h)), 0);
+            const areaB = b.freeRects.reduce((m,r)=> Math.max(m, Math.max(0,r.w)*Math.max(0,r.h)), 0);
+            return areaB - areaA;
+        });
+        return full[0];
+    }
+
     // אלגוריתם guillotine רגיל
     function guillotineLayouts() {
         const layouts = [];
@@ -985,6 +1058,10 @@ function packPlatesForGroup(groupKey, piecesMM, kerfMM) {
     const single = trySingleRowLayout();
     if (single) {
         return { plate: chosen, layouts: [ { plate: chosen, placed: single.placed, freeRects: single.freeRects } ] };
+    }
+    const shelf = tryShelfMaxWaste();
+    if (shelf) {
+        return { plate: chosen, layouts: [ { plate: chosen, placed: shelf.placed, freeRects: shelf.freeRects } ] };
     }
     return { plate: chosen, layouts: guillotineLayouts() };
 }
@@ -1320,7 +1397,8 @@ function renderResults(results) {
 
     // בניית HTML פשוט לטבלה
     function buildHtmlTable(headers, rows) {
-    return `<table class="db-table" dir="ltr"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const dir = (language === 'he') ? 'rtl' : 'ltr';
+    return `<table class="db-table" dir="${dir}"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
 
     // דיאגרמות
@@ -1363,7 +1441,7 @@ function renderResults(results) {
         let idx = 1;
         // הוסף את הפאנל לפני הדיאגרמות
         parts.push(settingsPanel());
-        // beams diagrams
+    // beams diagrams
         for (const r of results.beams) {
             const thIdx = getThicknessColIndex();
             const wIdx = getWidthColIndex();
@@ -1385,7 +1463,8 @@ function renderResults(results) {
                     ? `פריט ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} מ״מ*מ״מ , ${formatSmart(lenM)} מ׳`
                     : `Item ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} mm*mm , ${formatSmart(lenM)} m`;
             }
-            parts.push(`<div class="results-section"><h3>${title}</h3>${beamSvg(r)}</div>`);
+            const h3Dir = (language==='he') ? ' dir="rtl"' : '';
+            parts.push(`<div class="results-section"><h3${h3Dir}>${title}</h3>${beamSvg(r)}</div>`);
             idx++;
         }
         // plates diagrams
@@ -1407,7 +1486,8 @@ function renderResults(results) {
                     ? `פריט ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} מ׳*מ׳ , עובי ${formatSmart(thMM)} מ״מ`
                     : `Item ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} m*m , thickness ${formatSmart(thMM)} mm`;
             }
-            parts.push(`<div class="results-section"><h3>${title}</h3>${plateSvg(p)}</div>`);
+            const h3Dir = (language==='he') ? ' dir="rtl"' : '';
+            parts.push(`<div class="results-section"><h3${h3Dir}>${title}</h3>${plateSvg(p)}</div>`);
             idx++;
         }
     return parts.join('');
@@ -1418,7 +1498,17 @@ function renderResults(results) {
     const total = r.lengthDisp; // בתצוגה: m במטרי / inch באימפריאלי
         // מזהה ייחודי לדיאגרמה זו
         const svgId = `svg_${svgIdCounter++}`;
-    const w = 1000, h = 80; // גובה מוגדל כדי לשים תווית אורך מתחת לקורה
+    const w = 1000;
+    // התאמת גובה: מובייל פי 3, דסקטופ רגיל; ב-PDF נשתמש בסקייל נפרד בהמשך
+    let isMobile = false;
+    try {
+        if (typeof window !== 'undefined') {
+            isMobile = (window.matchMedia && window.matchMedia('(max-width: 840px)').matches) || (window.innerWidth <= 840);
+        }
+    } catch(_){ isMobile = false; }
+    const baseH = 80;
+    const m = isMobile ? 1.5 : 1; // מובייל +50%
+    const h = Math.round(baseH * m);
         const scale = total>0 ? (w / total) : 1;
         let x = 0;
     // קיבוץ חתיכות זהות לצביעה
@@ -1447,36 +1537,65 @@ function renderResults(results) {
                         <line x1="0" y1="0" x2="0" y2="8" stroke="#c8c8c8" stroke-width="2" />
                     </pattern>`;
             // רקע ברירת מחדל לכל אזור הקורה — כמו פחת (כדי שהשוליים יראו כרקע פחת)
-            rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="#f3f3f3" />`);
-            rects.push(`<rect x="0" y="10" width="${w}" height="40" fill="url(#${svgId}_wasteHatch)" />`);
+            const barY = Math.round(10 * m);
+            const barH = Math.round(40 * m);
+            rects.push(`<rect x="0" y="${barY}" width="${w}" height="${barH}" fill="#f3f3f3" />`);
+            rects.push(`<rect x="0" y="${barY}" width="${w}" height="${barH}" fill="url(#${svgId}_wasteHatch)" />`);
     const unitShort = unitSystem==='imperial' ? '″' : (language==='he' ? 'ס״מ' : 'cm');
     const showLabels = !!displaySettings.showPieceLabels;
+    // פונקציית עזר: גודל פונט אחיד ועקבי לפי גובה החתיכה
+    const clamp = (v,min,max) => Math.min(max, Math.max(min, v));
+    const baseFS = clamp(Math.round((Math.max(1, Math.round(40 * m))) * 0.35), 12, 20); // מבוסס על ברירת המחדל ~barH
+    const fsLarge = baseFS;
+    const fsMed = Math.max(11, Math.round(baseFS * 0.9));
+    const fsSmall = Math.max(10, Math.round(baseFS * 0.8));
+    // גופן זהה לטבלאות
+    const fontFamily = (language==='he')
+        ? "'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial"
+        : "'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
+    const fontFamilyAttr = `font-family="${fontFamily}"`;
+    const plateApproxTextWidth = (txt, fs) => (String(txt||'').length * fs * 0.6);
+    // ...
         for (let i=0;i<pieces.length;i++) {
             const pw = Math.max(0.5, (pieces[i]*scale)); // ללא עיגול כדי למנוע הצטברות שגיאה
             const key = keyFor(pieces[i]); // קיבוץ לפי גודל בתצוגה
             const fillColor = displaySettings.colorPieces ? (groupColor[key]) : '#ffffff';
-            rects.push(`<rect x="${x}" y="10" width="${pw}" height="40" fill="${fillColor}" stroke="#cfd4da" />`);
-            // טקסט: בפנים אם יש מקום, אחרת מעל, עם גזירה לרוחב החתיכה
+            // Align piece rectangles exactly with the beam bar (top and height)
+            rects.push(`<rect x="${x}" y="${barY}" width="${pw}" height="${barH}" fill="${fillColor}" stroke="#cfd4da" />`);
+            // טקסט: בפנים, ממורכז אנכית ואופקית
             const labelVal = unitSystem==='imperial' ? pieces[i] : (pieces[i]*100); // inch או cm
             const numStr = `${formatSmart(labelVal)}`;
             const unitStr = `${unitShort}`;
             const centerX = x + pw/2;
             const clipId = `${svgId}_clip_${i}`;
-            clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="10" width="${pw}" height="40" /></clipPath>`);
+            clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="${barY}" width="${pw}" height="${barH}" /></clipPath>`);
             if (showLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                 if (pw >= 86) {
-                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?'':' '} ${unitSystem==='imperial'?'':unitStr}</text>`);
+                    const yMid = barY + barH/2;
+                    const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+                    const label = unitSystem==='imperial'
+                        ? `${numStr}${unitShort}`
+                        : (language==='he' ? `${unitStr}${NBSP}${LRI}${numStr}${PDI}` : `${numStr} ${unitShort}`);
+                    rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yMid}" font-size="${fsLarge}" text-anchor="middle" dominant-baseline="middle" fill="#333">${label}</text>`);
                 } else if (pw >= 42) {
-                    const yTop = 28;
-                    if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#333">${numStr}${unitShort}</text>`);
-                    } else {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#333">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
-                    }
+                    const yMid = barY + barH/2;
+                    const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+                    // מצב ביניים: מספר בשורה ראשונה, יחידה בשורה שנייה
+                    const numLine = `${LRI}${numStr}${PDI}`;
+                    const unitLine = `${unitShort}`;
+                    rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${centerX}" y="${yMid-6}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="middle" fill="#333">${numLine}<tspan x="${centerX}" dy="14">${unitLine}</tspan></text>`);
                 } else {
-                    // תמיד בתוך החתיכה: הצג מספר בלבד במרכז, פונט קטן
-                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${centerX}" y="35" font-size="11" text-anchor="middle" fill="#333">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
+                    // תמיד בתוך החתיכה: הצג מספר (ועוד יחידה בעברית משמאל) במרכז, פונט קטן
+                    const ySmall = barY + barH/2;
+                    let label;
+                    if (unitSystem==='imperial') {
+                        label = `${numStr}`; // קטן מאוד: מספר בלבד
+                    } else {
+                        const LRI='\u2066', PDI='\u2069';
+                        label = `${LRI}${numStr}${PDI}`; // מספר בלבד
+                    }
+                    rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${centerX}" y="${ySmall}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#333">${label}</text>`);
                 }
             }
             x += pw;
@@ -1491,35 +1610,47 @@ function renderResults(results) {
         }
         // פחת
         if (x < w) {
-            const wasteW = Math.max(1, w-x);
-            // אורך הפחת במרכז ביחידות התצוגה (מטרי: ס"מ, אימפריאלי: אינץ')
-            const wasteLenDisp = (w - x) / scale;
-            const numStr = `${formatSmart(unitSystem==='imperial'?wasteLenDisp:(wasteLenDisp*100))}`;
+            const wasteW = Math.max(1, w - x);
+            const wasteLenDisp = (w - x) / scale; // יחידות תצוגה
+            const numStr = `${formatSmart(unitSystem==='imperial' ? wasteLenDisp : (wasteLenDisp*100))}`;
             const unitStr = `${unitShort}`;
             const centerX = x + wasteW/2;
             const clipIdW = `${svgId}_clip_waste`;
-            clipDefs.push(`<clipPath id="${clipIdW}"><rect x="${x}" y="10" width="${wasteW}" height="40" /></clipPath>`);
+            clipDefs.push(`<clipPath id="${clipIdW}"><rect x="${x}" y="${barY}" width="${wasteW}" height="${barH}" /></clipPath>`);
             if (showLabels) {
                 const weightW = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                 if (wasteW >= 86) {
-                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="13" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:' '+unitStr}</text>`);
+                    const yMid = barY + barH/2;
+                    const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+                    const label = unitSystem==='imperial' ? `${numStr}${unitShort}` : (language==='he' ? `${unitStr}${NBSP}${LRI}${numStr}${PDI}` : `${numStr} ${unitShort}`);
+                    rects.push(`<text ${weightW} ${fontFamilyAttr} clip-path="url(#${clipIdW})" x="${centerX}" y="${yMid}" font-size="${fsLarge}" text-anchor="middle" dominant-baseline="middle" fill="#666">${label}</text>`);
                 } else if (wasteW >= 42) {
-                    const yTop = 28;
-                    if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}${unitShort}</text>`);
-                    } else {
-                        rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="${yTop}" font-size="12" text-anchor="middle" fill="#666">${numStr}<tspan x="${centerX}" dy="14">${unitStr}</tspan></text>`);
-                    }
+                    const yMid = barY + barH/2;
+                    const LRI='\u2066', PDI='\u2069';
+                    const numLine = `${LRI}${numStr}${PDI}`;
+                    const unitLine = `${unitShort}`;
+                    rects.push(`<text ${weightW} ${fontFamilyAttr} clip-path="url(#${clipIdW})" x="${centerX}" y="${yMid-6}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="middle" fill="#666">${numLine}<tspan x="${centerX}" dy="14">${unitLine}</tspan></text>`);
                 } else {
-                    rects.push(`<text ${weightW} clip-path="url(#${clipIdW})" x="${centerX}" y="35" font-size="11" text-anchor="middle" fill="#666">${numStr}${unitSystem==='imperial'?unitShort:''}</text>`);
+                    const ySmall = barY + barH/2;
+                    let label;
+                    if (unitSystem==='imperial') {
+                        label = `${numStr}`;
+                    } else {
+                        const LRI='\u2066', PDI='\u2069';
+                        label = `${LRI}${numStr}${PDI}`;
+                    }
+                    rects.push(`<text ${weightW} ${fontFamilyAttr} clip-path="url(#${clipIdW})" x="${centerX}" y="${ySmall}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#666">${label}</text>`);
                 }
             }
         }
         // קו עדין לכל רוחב המסך + טקסט אורך קורה ממורכז מעל הקו
-    const beamLenLbl = unitSystem==='imperial' 
-        ? `${formatSmart(total)}${unitShort}`
-        : `${formatSmart(total*100)} ${unitShort}`;
-    const lineY = 70;
+    const beamLenLbl = (function(){
+        if (unitSystem==='imperial') return `${formatSmart(total)}${unitShort}`;
+        const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+        const n = `${formatSmart(total*100)}`;
+    return (language==='he') ? `${unitShort}${NBSP}${LRI}${n}${PDI}` : `${n} ${unitShort}`;
+    })();
+    const lineY = isMobile ? (barY + barH + 20) : 70;
     // קו דק רציף לכל רוחב המסך עם רווח מתחת לטקסט
     const txt = beamLenLbl;
     const approxTextW = Math.max(60, txt.length * 7); // הערכת רוחב טקסט לפונט 12px
@@ -1531,9 +1662,9 @@ function renderResults(results) {
     const baseLineLeft = showLabels ? `<line x1="0" y1="${lineY}" x2="${leftX2}" y2="${lineY}" stroke="#ccc" stroke-width="1" />` : '';
     const baseLineRight = showLabels ? `<line x1="${rightX1}" y1="${lineY}" x2="${w}" y2="${lineY}" stroke="#ccc" stroke-width="1" />` : '';
     const weightBase = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-    const rulerText = showLabels ? `<text ${weightBase} x="${center}" y="${lineY-2}" font-size="13" text-anchor="middle" fill="#444">${beamLenLbl}</text>` : '';
+    const rulerText = showLabels ? `<text ${weightBase} ${fontFamilyAttr} x="${center}" y="${lineY-2}" font-size="13" text-anchor="middle" fill="#444">${beamLenLbl}</text>` : '';
     const defs = `<defs>${defsBase}${clipDefs.join('')}</defs>`;
-    return `<svg class="diagram" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${defs}${rects.join('')}${baseLineLeft}${baseLineRight}${rulerText}</svg>`;
+    return `<svg class="diagram" data-kind="beam" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${defs}${rects.join('')}${baseLineLeft}${baseLineRight}${rulerText}</svg>`;
     }
 
     function plateSvg(p) {
@@ -1541,6 +1672,17 @@ function renderResults(results) {
     const viewW = 1000, viewH = 600;
     const svgId = `svg_${svgIdCounter++}`;
     const showLabels = !!displaySettings.showPieceLabels;
+    // אחידות גודל פונט בין פלטות לקורות: נגזור מגובה תא ממוצע
+    const clamp = (v,min,max) => Math.min(max, Math.max(min, v));
+    const baseFS = clamp(Math.round(80 * 0.28), 12, 20); // יעד קריאות מיידי
+    const fsLarge = baseFS;
+    const fsMed = Math.max(11, Math.round(baseFS * 0.9));
+    const fsSmall = Math.max(10, Math.round(baseFS * 0.8));
+    // גופן זהה לטבלאות
+    const fontFamily = (language==='he')
+        ? "'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial"
+        : "'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
+    const fontFamilyAttr = `font-family="${fontFamily}"`;
         let PW = p.plateWmm || toMM(p.width, inventoryUnits[getWidthColIndex()]||'');
         let PH = p.plateHmm || toMM(p.length, inventoryUnits[getLengthColIndex()]||'');
         // וודא שהצלע הארוכה לרוחב
@@ -1582,27 +1724,38 @@ function renderResults(results) {
             const wDisp = unitSystem==='imperial' ? (wmm/25.4) : (wmm/10);
             const hDisp = unitSystem==='imperial' ? (hmm/25.4) : (hmm/10);
             const unitLbl = unitSystem==='imperial' ? '″' : (language==='he'?'ס״מ':'cm');
-            const label = unitSystem==='imperial'
-                ? `${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}`
-                : `${formatSmart(wDisp)}×${formatSmart(hDisp)} ${unitLbl}`;
+            const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+            const wNum = `${formatSmart(wDisp)}`;
+            const hNum = `${formatSmart(hDisp)}`;
+            // Wide-case: Hebrew metric — show lengthXwidth then a space and grouped units at the end (e.g., "30X20 ס״מ*ס״מ").
+            const label = (unitSystem==='imperial')
+                ? `${wNum}${unitLbl}×${hNum}${unitLbl}`
+                : (language==='he'
+                    ? `${LRI}${hNum}${PDI}X${LRI}${wNum}${PDI}${NBSP}${unitLbl}*${unitLbl}`
+                    : `${wNum}×${hNum} ${unitLbl}`);
             const cx = px + pw/2, cy = py + ph/2;
-            const fitsWide = pw >= 100; const fitsMedium = pw >= 60 && ph >= 28;
-            if (displaySettings.showPieceLabels) {
+            // הערכת התאמה לפי רוחב משוער וטקסט
+            const margin = 8;
+            const labelNumsOnly = (language==='he') ? `${LRI}${hNum}${PDI}X${LRI}${wNum}${PDI}` : `${wNum}×${hNum}`;
+            const labelUnits = (unitSystem==='imperial') ? `${unitLbl}×${unitLbl}` : (language==='he' ? `${unitLbl}*${unitLbl}` : `${unitLbl}×${unitLbl}`);
+            const wideOK = (approxTextWidthPlate(label, fsLarge) <= (pw - margin)) && (ph >= fsLarge * 1.2);
+            const mediumOK = (approxTextWidthPlate(labelNumsOnly, fsMed) <= (pw - margin)) && (ph >= fsMed * 2.0);
+        if (displaySettings.showPieceLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-                if (fitsWide) {
-                    rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="#333">${label}</text>`);
-                } else if (fitsMedium) {
-                    if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}</text>`);
-                    } else {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy-6}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
-                    }
+                if (wideOK) {
+            const dirAttr = (language==='he') ? ' direction="rtl"' : '';
+            rects.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="${fsLarge}" text-anchor="middle" dominant-baseline="middle" fill="#333">${label}</text>`);
+                } else if (mediumOK) {
+                    // שני קווים: שורת מספרים (אורךXרוחב) ואז שורת יחידות
+                    const numsLine = labelNumsOnly;
+                    const unitsLine = labelUnits;
+            const dirAttr = (language==='he') ? ' direction="rtl"' : '';
+            rects.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy-6}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="middle" fill="#333">${numsLine}<tspan x="${cx}" dy="14">${unitsLine}</tspan></text>`);
                 } else {
-                    if (unitSystem==='imperial') {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}${unitLbl}×${formatSmart(hDisp)}${unitLbl}</text>`);
-                    } else {
-                        rects.push(`<text ${weightAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="11" text-anchor="middle" dominant-baseline="middle" fill="#333">${formatSmart(wDisp)}×${formatSmart(hDisp)}</text>`);
-                    }
+                    // קטן מאוד: רק מספרים (אורךXרוחב)
+                    const numsOnly = labelNumsOnly;
+            const dirAttr = (language==='he') ? ' direction="rtl"' : '';
+            rects.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#333">${numsOnly}</text>`);
                 }
             }
         });
@@ -1622,23 +1775,30 @@ function renderResults(results) {
                     const wDisp = unitSystem==='imperial' ? (wmm/25.4) : (wmm/10);
                     const hDisp = unitSystem==='imperial' ? (hmm/25.4) : (hmm/10);
                     const unitLbl = unitSystem==='imperial' ? inchSym : (language==='he'?'ס״מ':'cm');
-                    const labelInline = unitSystem==='imperial'
-                        ? `${formatSmart(wDisp)}${inchSym}×${formatSmart(hDisp)}${inchSym}`
-                        : `${formatSmart(wDisp)}×${formatSmart(hDisp)} ${unitLbl}`;
+                    const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+                    const wNum = `${formatSmart(wDisp)}`;
+                    const hNum = `${formatSmart(hDisp)}`;
+                    const labelInline = (unitSystem==='imperial')
+                        ? `${wNum}${inchSym}×${hNum}${inchSym}`
+                        : (language==='he'
+                            ? `${LRI}${hNum}${PDI}X${LRI}${wNum}${PDI}${NBSP}${unitLbl}*${unitLbl}`
+                            : `${wNum}×${hNum} ${unitLbl}`);
                     const cx = px + pw/2, cy = py + ph/2;
-                    const fitsWide = pw >= 100 && ph >= 24; // סף סביר לקריאות
-                    const fitsMedium = pw >= 70 && ph >= 24;
+                    const margin = 8;
+                    const numsOnly = (language==='he') ? `${LRI}${hNum}${PDI}X${LRI}${wNum}${PDI}` : `${wNum}×${hNum}`;
+                    const unitsOnly = unitSystem==='imperial' ? `${inchSym}×${inchSym}` : (language==='he' ? `${unitLbl}*${unitLbl}` : `${unitLbl}×${unitLbl}`);
+                    const wideOK = (approxTextWidthPlate(labelInline, fsLarge) <= (pw - margin)) && (ph >= fsLarge * 1.2);
+                    const mediumOK = (approxTextWidthPlate(numsOnly, fsMed) <= (pw - margin)) && (ph >= fsMed * 2.0);
                     const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                     const color = '#555';
-                    if (fitsWide) {
-                        rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="${color}">${labelInline}</text>`);
-                    } else if (fitsMedium) {
-                        if (unitSystem==='imperial') {
-                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}${inchSym}×${formatSmart(hDisp)}${inchSym}</text>`);
-                        } else {
-                            // בשתי שורות: מספרים ואז יחידה
-                            rects.push(`<text ${weightAttr} x="${cx}" y="${cy-6}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="${color}">${formatSmart(wDisp)}×${formatSmart(hDisp)}<tspan x="${cx}" dy="14">${unitLbl}</tspan></text>`);
-                        }
+                    if (wideOK) {
+                        const dirAttr = (language==='he') ? ' direction="rtl"' : '';
+                        rects.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} x="${cx}" y="${cy}" font-size="${fsLarge}" text-anchor="middle" dominant-baseline="middle" fill="${color}">${labelInline}</text>`);
+                    } else if (mediumOK) {
+                        const numsLine = numsOnly;
+                        const unitsLine = unitsOnly;
+                        const dirAttr = (language==='he') ? ' direction="rtl"' : '';
+                        rects.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} x="${cx}" y="${cy-6}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="middle" fill="${color}">${numsLine}<tspan x="${cx}" dy="14">${unitsLine}</tspan></text>`);
                     }
                 }
             }
@@ -1667,7 +1827,7 @@ function renderResults(results) {
         area.querySelectorAll('.x-scroll').forEach(sc => { sc.scrollLeft = 0; });
     } catch(_) {}
 
-        // Show calculation errors in a full-screen modal with an OK button
+    // Show calculation errors in a full-screen modal with an OK button
         try {
             const root = document.body;
             const prev = document.getElementById('global-error-modal');
@@ -1681,7 +1841,7 @@ function renderResults(results) {
                         <div class="global-modal-backdrop"></div>
                         <div class="global-modal-box">
                             <h3 id="global-modal-title" class="global-modal-title">${title}</h3>
-                            <div class="global-modal-body">${msgs}</div>
+                            <div class="global-modal-body" style="color:#000">${msgs}</div>
                             <div class="global-modal-actions"><button id="global-modal-ok" class="btn primary">${okLbl}</button></div>
                         </div>
                     </div>`;
@@ -1713,6 +1873,33 @@ function renderResults(results) {
     if (dsFont) dsFont.addEventListener('change', () => { displaySettings.fontWeight = dsFont.value==='bold'?'bold':'regular'; saveData('displaySettings', displaySettings); reRender(); });
     if (dsLabels) dsLabels.addEventListener('change', () => { displaySettings.showPieceLabels = !!dsLabels.checked; saveData('displaySettings', displaySettings); reRender(); });
     if (dsLabelsSwitch) dsLabelsSwitch.addEventListener('click', () => { displaySettings.showPieceLabels = !displaySettings.showPieceLabels; saveData('displaySettings', displaySettings); reRender(); });
+}
+
+// חלון קופץ פשוט עם כפתור אישור
+function showSimpleModal(message, title) {
+    try {
+        const root = document.body;
+        // סגור חלונות קודמים
+        document.getElementById('global-error-modal')?.remove();
+        document.getElementById('global-info-modal')?.remove();
+        const okLbl = (language==='he') ? 'אישור' : ((translations[language] && translations[language].ok) ? translations[language].ok : 'OK');
+        const titleText = title || (language==='he' ? 'הודעה' : 'Notice');
+    const modalHtml = `
+            <div id="global-info-modal" class="global-modal" role="dialog" aria-modal="true" aria-labelledby="global-info-title">
+                <div class="global-modal-backdrop"></div>
+                <div class="global-modal-box">
+                    <h3 id="global-info-title" class="global-modal-title">${titleText}</h3>
+            <div class="global-modal-body" style="color:#000">${message}</div>
+                    <div class="global-modal-actions"><button id="global-info-ok" class="btn primary">${okLbl}</button></div>
+                </div>
+            </div>`;
+        root.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = document.getElementById('global-info-modal');
+        const close = () => { try { modal && modal.remove(); } catch(_){} };
+        modal?.querySelector('#global-info-ok')?.addEventListener('click', close);
+        modal?.querySelector('.global-modal-backdrop')?.addEventListener('click', close);
+        document.addEventListener('keydown', function onKey(e){ if(e.key==='Escape'){ close(); document.removeEventListener('keydown', onKey); } });
+    } catch(_) {}
 }
 
 // Center Block 1 title and actions when there are no requirement rows
@@ -1831,6 +2018,15 @@ if (addReqBtn) {
     addReqBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        // אם המאגר ריק — הצג הודעה במקום הוספת שורת דרישה
+        const isInvEmpty = !Array.isArray(inventoryData) || inventoryData.length === 0;
+        if (isInvEmpty) {
+            const msg = (language==='he')
+                ? 'מאגר העצים ריק, ראשית יש לטעון קובץ מאגר או להזין ידנית'
+                : 'The inventory is empty. Please load a file or enter items manually first.';
+            showSimpleModal(msg);
+            return;
+        }
         if (window.__addingReq) return;
         window.__addingReq = true;
         try { addRequirementRow(); } finally { setTimeout(()=>{ window.__addingReq = false; }, 0); }
@@ -1868,6 +2064,15 @@ function renderResultsPlaceholder(summary) {
 
 const calcBtn = document.getElementById('calc-opt');
 if (calcBtn) calcBtn.addEventListener('click', () => {
+    // אין דרישות? הצג הודעה ואל תחשב
+    const reqs = gatherRequirements();
+    if (!Array.isArray(reqs) || reqs.length === 0) {
+        const msg = (language==='he')
+            ? 'יש להזין דרישות לפרויקט טרם החישוב'
+            : 'Please enter project requirements before computing.';
+        showSimpleModal(msg);
+        return;
+    }
     // Show loader overlay and run Lottie (or spinner) for at least 2 seconds
     const overlay = document.getElementById('loader-overlay');
     const lottieEl = document.getElementById('lottie-container');
@@ -2054,25 +2259,23 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
 
                 // Build a temporary wrapper that includes the H2 title and ALL tables + diagrams
                 const titleEl = resultsSection.querySelector('h2');
-        const temp = document.createElement('div');
-        temp.style.background = '#fff';
-        temp.style.padding = '16px';
-        temp.style.maxWidth = '900px';
-        temp.style.margin = '0 auto';
-                // Make content responsive inside capture
+    const temp = document.createElement('div');
+    temp.style.background = '#fff';
+    temp.style.padding = '16px';
+    // כפה פריסה "שולחנית" גם במובייל כדי למנוע חיתוך טבלאות
+    temp.style.width = '1100px';
+    temp.style.maxWidth = '1100px';
+    temp.style.margin = '0 auto';
+                // Make content responsive inside capture without overriding the site's fonts/colors
                 const style = document.createElement('style');
                 style.textContent = `
-                    /* Base font larger for PDF */
-                    #results-area, #results-area * { font-size: 16px; line-height: 1.45; }
-                    /* Avoid canvas taint from CSS background images/filters */
-                    #results-area, #results-area * { background-image: none !important; filter: none !important; }
-                    .db-table{width:100%;border-collapse:collapse}
-                    .db-table th,.db-table td{padding:8px;border:1px solid #ddd;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+                    /* Avoid taint and keep visuals close to site */
+                    #results-area, #results-area * { background-image: none !important; }
                     .diagram{width:100%;height:auto;border:none !important;border-radius:0 !important;padding:12px !important}
                     img{max-width:100%;height:auto}
-                    h2{font-size:22px;margin:10px 0 14px}
-                    h3{font-size:18px;margin:8px 0 10px}
-                    /* Force logo size in header to 96px height (50% bigger than 64px) */
+                    h2{margin:10px 0 14px}
+                    h3{margin:8px 0 10px}
+                    /* Header logo size */
                     #pdf-header img{height:96px !important; max-width:270px !important; width:auto !important; display:block; margin:0 auto 8px}
                     #pdf-header svg{height:96px !important; width:auto !important; display:block; margin:0 auto 8px}
                 `;
@@ -2120,8 +2323,10 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
         header.appendChild(h);
 
         temp.appendChild(header);
-                // Clone ALL results content
+        // Clone ALL results content
                 const clonedArea = resultsArea.cloneNode(true);
+                // הגדלת גובה הקורה פי 2 ב-PDF: סקייל ל-diagram של קורות בלבד
+                // שמירה על פרופורציות הדיאגרמות ב‑PDF; ללא מתיחה אנכית של קורות
                 // Remove the display settings strip/panel from the export
                 const ds = clonedArea.querySelector('#display-settings');
                 if (ds) ds.remove();
@@ -2129,17 +2334,107 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                 if (dsp) dsp.remove();
                 const dsBtn = clonedArea.querySelector('#btn-display-settings');
                 if (dsBtn) dsBtn.remove();
-                // Increase spacing between sections/tables for nicer gaps in PDF
-                        const style2 = document.createElement('style');
-                style2.textContent = `
-                            .results-section { margin: 0 0 42px 0 !important; }
-                            table { margin: 0 0 24px 0 !important; }
-                `;
+                // Increase spacing and allow wide tables/diagrams to fit page in PDF
+            const style2 = document.createElement('style');
+        style2.textContent = `
+                .results-section { margin: 0 0 42px 0 !important; }
+                #results-area .x-scroll{ overflow: visible !important; }
+                table { margin: 0 0 24px 0 !important; max-width: 100% !important; table-layout: auto !important; }
+                thead, tbody, tr, th, td { box-sizing: border-box; }
+                .diagram{ display:block !important; }
+        `;
                 temp.appendChild(style2);
+                // Replace inline SVGs with PNG <img> to improve html2canvas reliability (esp. on mobile and file://)
+                async function replaceSvgsWithImages(root){
+                    const svgs = Array.from(root.querySelectorAll('svg.diagram'));
+                    const tasks = svgs.map(svg => new Promise(resolve => {
+                        try {
+                            const xml = new XMLSerializer().serializeToString(svg);
+                            const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+                            const viewBox = (svg.getAttribute('viewBox')||'').trim().split(/\s+/).map(Number);
+                            let vbW = 1000, vbH = 200;
+                            if (viewBox.length === 4 && viewBox.every(v=>isFinite(v))) {
+                                vbW = Math.max(1, viewBox[2]);
+                                vbH = Math.max(1, viewBox[3]);
+                            }
+                            // render SVG to offscreen canvas at 2x for crispness
+                            const imgEl = new Image();
+                            imgEl.crossOrigin = 'anonymous';
+                            imgEl.onload = () => {
+                                try {
+                                    const canvas = document.createElement('canvas');
+                                    const dpr = 2;
+                                    canvas.width = Math.round(vbW * dpr);
+                                    canvas.height = Math.round(vbH * dpr);
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.clearRect(0,0,canvas.width,canvas.height);
+                                    ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
+                                    const pngUrl = canvas.toDataURL('image/png');
+                                    const img = document.createElement('img');
+                                    img.className = 'diagram';
+                                    const kind = svg.getAttribute('data-kind') || '';
+                                    if (kind) img.setAttribute('data-kind', kind);
+                                    img.alt = 'diagram';
+                                    img.src = pngUrl;
+                                    img.style.width = '100%';
+                                    img.style.height = 'auto';
+                                    svg.parentNode.replaceChild(img, svg);
+                                } catch(_e) { /* fallback to inline svg as data url */
+                                    try {
+                                        const img = document.createElement('img');
+                                        img.className = 'diagram';
+                                        const kind = svg.getAttribute('data-kind') || '';
+                                        if (kind) img.setAttribute('data-kind', kind);
+                                        img.alt = 'diagram';
+                                        img.src = svgUrl;
+                                        img.style.width = '100%';
+                                        img.style.height = 'auto';
+                                        svg.parentNode.replaceChild(img, svg);
+                                    } catch(_){}
+                                } finally { resolve(); }
+                            };
+                            imgEl.onerror = () => { try { resolve(); } catch(_){} };
+                            imgEl.src = svgUrl;
+                        } catch(_) { resolve(); }
+                    }));
+                    try { await Promise.all(tasks); } catch(_){}
+                }
                 // Mark local images as CORS-anonymous and skip any remote images during capture
                 Array.from(clonedArea.querySelectorAll('img')).forEach(img => {
                     try { if (!/^https?:/i.test(img.src)) img.crossOrigin = 'anonymous'; } catch(_){}
                 });
+                // Perform SVG->IMG replacement on the cloned content before capture
+                await replaceSvgsWithImages(clonedArea);
+                // התאמת טבלת חיתוכים (הראשונה) שתתאים לרוחב הדף – הקטנה דינמית
+                try {
+                    const allTables = Array.from(clonedArea.querySelectorAll('.results-section table'));
+                    if (allTables.length) {
+                        const st = document.createElement('style');
+                        st.textContent = `.results-section table th, .results-section table td{ padding:6px 6px; }`;
+                        temp.appendChild(st);
+                        // allow layout to settle
+                        await new Promise(r => setTimeout(r, 0));
+                        for (const tbl of allTables) {
+                            try {
+                                tbl.style.maxWidth = 'none';
+                                tbl.style.tableLayout = 'auto';
+                                const wrapper = tbl.parentElement || clonedArea;
+                                const natural = tbl.scrollWidth;
+                                const available = wrapper.clientWidth || 1100;
+                                let scale = 1;
+                                if (natural > available) scale = available / natural;
+                                scale = Math.max(0.6, Math.min(1, scale));
+                                if (scale < 1) {
+                                    tbl.style.transform = `scale(${scale})`;
+                                    // לעקביות ומניעת חיתוך עמודות, תמיד עוגן משמאל
+                                    tbl.style.transformOrigin = `top left`;
+                                    tbl.style.display = 'inline-block';
+                                    tbl.style.width = natural + 'px';
+                                }
+                            } catch(_inner){}
+                        }
+                    }
+                } catch(_){ }
                 temp.appendChild(clonedArea);
         document.body.appendChild(temp);
 
@@ -2164,7 +2459,9 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                     backgroundColor: '#ffffff',
                     useCORS: true,
                     logging: false,
-                    imageTimeout: 0,
+                    imageTimeout: 1500,
+                    foreignObjectRendering: false,
+                    removeContainer: true,
                     ignoreElements: (el) => {
                         try {
                                                     const tag = el.tagName;
@@ -2236,7 +2533,7 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                 backgroundColor: '#ffffff',
                 useCORS: true,
                 logging: false,
-                imageTimeout: 0,
+                imageTimeout: 1500,
                 ignoreElements: (el) => {
                     try {
                         const tag = el.tagName;
