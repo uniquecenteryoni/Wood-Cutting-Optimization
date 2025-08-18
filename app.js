@@ -1819,7 +1819,7 @@ function renderResults(results) {
             <div class="results-section"><h3>${title1}</h3><div class="x-scroll">${table1()}</div></div>
             <div class="results-section"><h3>${title2}</h3><div class="x-scroll">${table2()}</div></div>
             <div class="results-section"><h3>${title3}</h3><div class="x-scroll">${table3()}</div></div>
-            <div class="results-section"><div class="x-scroll">${diagrams()}</div></div>
+            <div class="results-section"><div class="x-scroll"><div style="overflow-y:visible; touch-action:pan-x pan-y">${diagrams()}</div></div></div>
         `;
     // Ensure all horizontal wrappers start at x=0
     try {

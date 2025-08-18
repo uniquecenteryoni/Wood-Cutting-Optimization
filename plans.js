@@ -148,7 +148,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const lang = currentLang();
   if (input) input.placeholder = t[lang].search;
   const chip = document.querySelector('.plans-toolbar .chip');
-  if (chip) chip.childNodes[0].nodeValue = t[lang].total.replace(/"/g,'') + ' ';
+  if (chip) chip.childNodes[0].nodeValue = t[lang].total.replace(/["״]/g,'') + ' ';
   render(plans);
   input.addEventListener('input', () => render(searchPlans(input.value)));
 
@@ -159,7 +159,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const isMontessori = thumb.dataset.carousel === 'montessori';
       const dots = thumb.querySelectorAll('.dot');
       if (isMontessori) {
-        // 3-step carousel, click to advance
+  // 3-step carousel: swipe to move, arrows click to move, center tap opens
         const steps = thumb.querySelectorAll('.step');
         let step = 0;
         const sync = () => {
@@ -173,7 +173,9 @@ window.addEventListener('DOMContentLoaded', () => {
         if (prevBtn) prevBtn.addEventListener('click', (e)=>{ e.stopPropagation(); step = (step + 2) % 3; sync(); });
         if (nextBtn) nextBtn.addEventListener('click', (e)=>{ e.stopPropagation(); step = (step + 1) % 3; sync(); });
         // Center click opens in new tab (image or video)
-        thumb.addEventListener('click', () => {
+        thumb.addEventListener('click', (ev) => {
+          // ignore clicks on arrows
+          if (ev.target.closest('.arrow')) return;
           const cur = thumb.querySelector(`.step-${step}`);
           const img = cur?.tagName === 'IMG' ? cur.getAttribute('src') : null;
           const url = img || (cur?.tagName === 'IFRAME' ? cur.getAttribute('src') : null);
@@ -217,8 +219,9 @@ window.addEventListener('DOMContentLoaded', () => {
         const nextBtn = thumb.querySelector('.arrow.right');
         if (prevBtn) prevBtn.addEventListener('click', (e)=>{ e.stopPropagation(); show(false); });
         if (nextBtn) nextBtn.addEventListener('click', (e)=>{ e.stopPropagation(); show(true); });
-        // Center click opens image in new tab
-        thumb.addEventListener('click', () => {
+        // Center click opens image in new tab; arrow clicks should not open
+        thumb.addEventListener('click', (ev) => {
+          if (ev.target.closest('.arrow')) return;
           const curImg = showingSecondary ? secondary : primary;
           const url = curImg?.getAttribute('src');
           if (url) window.open(url, '_blank', 'noopener');
@@ -227,7 +230,7 @@ window.addEventListener('DOMContentLoaded', () => {
         let x0 = null; let y0=null; let moved=false;
         const onTouchStart = (e)=>{ const t=e.touches[0]; x0=t.clientX; y0=t.clientY; moved=false; };
         const onTouchMove = (e)=>{ if (x0===null) return; const t=e.touches[0]; const dx=t.clientX-x0; const dy=t.clientY-y0; if (Math.abs(dx)>10 && Math.abs(dx)>Math.abs(dy)) { moved=true; e.preventDefault(); } };
-        const onTouchEnd = (e)=>{ if (x0===null) return; if (moved){ const dx=(e.changedTouches?.[0]?.clientX ?? x0) - x0; if (dx < -20) { show(true); } else if (dx > 20) { show(false); } } else { const curImg = showingSecondary ? secondary : primary; const url = curImg?.getAttribute('src'); if (url) window.open(url, '_blank', 'noopener'); } x0=null; y0=null; moved=false; };
+  const onTouchEnd = (e)=>{ if (x0===null) return; if (moved){ const dx=(e.changedTouches?.[0]?.clientX ?? x0) - x0; if (dx < -20) { show(true); } else if (dx > 20) { show(false); } } else { const curImg = showingSecondary ? secondary : primary; const url = curImg?.getAttribute('src'); if (url) window.open(url, '_blank', 'noopener'); } x0=null; y0=null; moved=false; };
         thumb.addEventListener('touchstart', onTouchStart, {passive:true});
         thumb.addEventListener('touchmove', onTouchMove, {passive:false});
         thumb.addEventListener('touchend', onTouchEnd, {passive:true});

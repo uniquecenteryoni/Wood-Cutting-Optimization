@@ -44,9 +44,9 @@
     if (bLang) bLang.textContent = lang()==='he' ? 'english' : 'עברית';
     const bCur = el('#btn-currency');
     if (bCur) {
-      const storedSym = readStr('currencySymbol', '') || '';
-      const sym = storedSym && /[€$₪]/.test(storedSym) ? storedSym : symbolFromCurrency(currency());
-      bCur.textContent = sym || '€';
+  const storedSym = (readStr('currencySymbol', '') || '').replace(/["'״]/g,'');
+  const sym = storedSym && /[€$₪]/.test(storedSym) ? storedSym : symbolFromCurrency(currency());
+  bCur.textContent = sym || '€';
     }
     const bUnits = el('#btn-units');
     if (bUnits) bUnits.textContent = unit()==='metric' ? 'm' : 'inch';
@@ -179,6 +179,49 @@
     } catch{}
     applyDir();
     updateButtons();
+    // Mobile: make vertical scroll always work from within horizontally scrollable areas
+    try{
+      const enableCrossScroll = (el)=>{
+        if (!el) return;
+        let x0=null, y0=null, locked=null; // 'x' or 'y'
+        const onStart = (e)=>{ const t=e.touches?.[0]; if(!t) return; x0=t.clientX; y0=t.clientY; locked=null; };
+        const onMove = (e)=>{
+          if (x0==null||y0==null) return;
+          const t=e.touches?.[0]; if(!t) return;
+          const dx=Math.abs(t.clientX-x0), dy=Math.abs(t.clientY-y0);
+          if (!locked){ locked = dx>dy ? 'x' : 'y'; }
+          if (locked==='y'){
+            // allow page to scroll; don't trap vertical gesture
+            el.style.overscrollBehaviorY = 'auto';
+            // Do not preventDefault so the page scrolls
+          } else {
+            // horizontal scrolling within the element
+            e.preventDefault();
+          }
+        };
+        const onEnd = ()=>{ x0=y0=null; locked=null; };
+        el.addEventListener('touchstart', onStart, {passive:true});
+        el.addEventListener('touchmove', onMove, {passive:false});
+        el.addEventListener('touchend', onEnd, {passive:true});
+      };
+      // Expose globally so other scripts can call after dynamic renders
+      window.__enableCrossScroll = enableCrossScroll;
+      // Bind initially
+      document.querySelectorAll('.x-scroll, svg.diagram').forEach(el=>enableCrossScroll(el));
+      // Observe for dynamic additions
+      const mo = new MutationObserver((mutations)=>{
+        for (const m of mutations){
+          m.addedNodes && m.addedNodes.forEach(node=>{
+            if (node.nodeType!==1) return;
+            const el = node;
+            if (el.matches && (el.matches('.x-scroll') || el.matches('svg.diagram'))) enableCrossScroll(el);
+            el.querySelectorAll && el.querySelectorAll('.x-scroll, svg.diagram').forEach(n=>enableCrossScroll(n));
+          });
+        }
+      });
+      mo.observe(document.body, { childList:true, subtree:true });
+    }catch{}
+
     // Localize nav and page titles
     try {
       const isHe = lang()==='he';

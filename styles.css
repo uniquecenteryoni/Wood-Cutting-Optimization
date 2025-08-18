@@ -18,7 +18,8 @@
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#1e1e1e;margin:0;padding:0;background:var(--bg)}
 /* Reserve scrollbar gutter to avoid layout shift when vertical scrollbar toggles */
-html, body{ scrollbar-gutter: stable both-edges }
+/* Reserve scrollbar gutter only on the scroll side (not both edges) to avoid narrow side gutters on desktop */
+html, body{ scrollbar-gutter: stable }
 /* Better mobile tap behavior */
 body{-webkit-tap-highlight-color: transparent}
 h1,h2,h3{font-family:'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial}
@@ -36,7 +37,7 @@ html[dir="rtl"] body{ font-size: 16px }
 html[dir="ltr"] body{ text-align:left }
 html[dir="rtl"] .container, html[dir="rtl"] .card{ text-align:right }
 html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
-.topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 8px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative;min-height:128px}
+.topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 8px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative;min-height:128px; width:100%}
 .site-title{margin:0 auto;text-align:center;font-size:28px;background:transparent;padding:6px 12px;border-radius:10px;display:inline-block}
 .top-left{position:absolute;left:14px;top:0;bottom:auto;display:flex;align-items:center;margin-top:6px}
 .top-center{position:absolute;left:50%;top:6px;bottom:6px;transform:translateX(-50%);display:flex;align-items:center}
@@ -45,13 +46,13 @@ html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .top-actions .btn{min-height:40px}
 .top-actions{display:flex;gap:10px;position:absolute;top:10px;right:14px}
 .top-actions .btn{min-height:40px}
-.main-nav{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10}
-.main-nav .nav-wrap{max-width:1200px;margin:0 auto;padding:8px 12px;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.main-nav{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--border);z-index:10; width:100%}
+.main-nav .nav-wrap{max-width:none;width:100%;margin:0;padding:8px 12px;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .main-nav .nav-wrap::-webkit-scrollbar{display:none}
 .nav-link{display:inline-block;padding:8px 12px;border-radius:999px;text-decoration:none;color:#2b2b2b;white-space:nowrap;transition:background .2s ease,color .2s ease}
 .nav-link:hover{background:var(--head2)}
 .nav-link.active{background:var(--primary);color:#fff}
-.container{max-width:100%;width:100%;margin:0 auto;padding:0;display:grid;grid-template-columns:1fr;gap:0}
+.container{max-width:100vw;width:100vw;margin:0 auto;padding:0;display:grid;grid-template-columns:1fr;gap:0}
 .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.04);border:1px solid var(--border); max-width:100%}
 /* Full-bleed page sections: only top-level cards under .container become flat bands */
 .container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:56px 12px}
@@ -187,8 +188,8 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .file-btn span{font:inherit}
 .req-row .small{font-size:12px;color:var(--muted)}
 .results-section{margin-top:24px}
-.diagram{border:none;border-radius:0;padding:8px;background:#fff}
-.diagram text{pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.diagram{border:none;border-radius:0;padding:8px;background:#fff; touch-action:pan-x pan-y}
+.diagram text{pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; user-select:none}
 .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .legend .item{display:flex;gap:6px;align-items:center}
 .pastel{border-radius:4px;width:20px;height:14px}
@@ -279,7 +280,7 @@ html[dir="ltr"] .loader-text{font-family:'Josefin Sans Variable', 'Rubik', syste
 .results-section > .x-scroll{margin:10px 0 0 0;}
 #results-area .results-section + .results-section{margin-top:32px}
 #block-res h2 + #results-area{margin-top:16px}
-#results-area{max-width:100%; overflow:visible; padding-left:clamp(12px, 5vw, 56px); padding-right:clamp(12px, 5vw, 56px)}
+#results-area{max-width:100vw; overflow:visible; padding-left:clamp(8px, 3vw, 40px); padding-right:clamp(8px, 3vw, 40px)}
 .container #block-res{ overflow-x:hidden }
 #results-area{ overflow-x:hidden }
 .no-results{margin:0 auto; text-align:center; display:block; padding:8px 12px}
@@ -391,14 +392,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 @supports (padding: max(0px)){
 	body{ width:100vw; }
 }
-.x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x}
+.x-scroll{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; /* Allow both directions so vertical scroll always works */ touch-action:pan-x pan-y}
 .diagram svg{max-width:100%;height:auto;display:block}
 @media(max-width:640px){
 	.db-area{-webkit-overflow-scrolling:touch}
 	#db-table-wrap{overflow-x:auto}
 }
 /* Ensure DB table can scroll horizontally without affecting the page */
-#db-table-wrap{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x; scrollbar-gutter: stable both-edges}
+#db-table-wrap{overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x pan-y; scrollbar-gutter: stable}
 #db-table-wrap{overflow-anchor: none}
 
 /* Make main blocks edge-to-edge on mobile (no side gutters under the header) */
