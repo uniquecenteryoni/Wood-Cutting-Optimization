@@ -1691,7 +1691,7 @@ function renderResults(results) {
         const scale = PW>0 ? (viewW / PW) : 1;
         const platePxW = viewW;
     const platePxH = Math.max(80, Math.min(viewH, Math.round(PH * scale)));
-    const extraBottom = 26; // מקום לטקסט מחוץ לפלטה
+    const extraBottom = 36; // מקום לטקסט מחוץ לפלטה — רווח גדול יותר מהפלטה
         const rects = [];
         // רקע פחת
         const defs = `
@@ -1804,12 +1804,29 @@ function renderResults(results) {
             }
         }
     // תווית מידות הפלטה מחוץ לפלטה, במרכז למטה
+    const origWm = (p.plateWmm || toMM(p.width, inventoryUnits[getWidthColIndex()]||'')) / 1000;
+    const origLm = (p.plateHmm || toMM(p.length, inventoryUnits[getLengthColIndex()]||'')) / 1000;
     const plateSizeLbl = unitSystem==='imperial'
-        ? `${formatSmart(PW/25.4)}″×${formatSmart(PH/25.4)}″`
-        : `${formatSmart(PW/1000)}×${formatSmart(PH/1000)} ${language==='he' ? 'מ׳*מ׳' : 'm*m'}`;
+        ? `${formatSmart((origWm*1000)/25.4)}″×${formatSmart((origLm*1000)/25.4)}″`
+        : (language==='he'
+            ? (() => {
+                const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+                const wNum = `${LRI}${formatSmart(origWm)}${PDI}`;
+                const hNum = `${LRI}${formatSmart(origLm)}${PDI}`;
+                return `${wNum}×${hNum}${NBSP}מ׳*מ׳`;
+            })()
+            : `${formatSmart(origWm)}×${formatSmart(origLm)} m*m`);
     const weightSize = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-    const sizeText = `<text ${weightSize} x="${platePxW/2}" y="${platePxH + extraBottom - 8}" font-size="13" text-anchor="middle" fill="#444">${plateSizeLbl}</text>`;
-    return `<svg class="diagram" viewBox="0 0 ${viewW} ${platePxH + extraBottom}" preserveAspectRatio="none">${defs}${rects.join('')}${sizeText}</svg>`;
+    let sizeText;
+    if (language==='he' && unitSystem!=='imperial') {
+        const LRI='\u2066', PDI='\u2069', NBSP='\u00A0';
+        const nums = `${LRI}${formatSmart(origWm)}${PDI}×${LRI}${formatSmart(origLm)}${PDI}`;
+        const units = 'מ׳*מ׳';
+        sizeText = `<text class="plate-size-label" ${weightSize} ${fontFamilyAttr} direction="rtl" style="unicode-bidi:isolate" x="${platePxW/2}" y="${platePxH + extraBottom - 8}" font-size="13" text-anchor="middle" fill="#444"><tspan>${nums}</tspan><tspan>${NBSP}${NBSP}${units}</tspan></text>`;
+    } else {
+        sizeText = `<text class="plate-size-label" ${weightSize} ${fontFamilyAttr} x="${platePxW/2}" y="${platePxH + extraBottom - 8}" font-size="13" text-anchor="middle" fill="#444">${plateSizeLbl}</text>`;
+    }
+    return `<svg class="diagram" data-kind="plate" viewBox="0 0 ${viewW} ${platePxH + extraBottom}" preserveAspectRatio="none">${defs}${rects.join('')}${sizeText}</svg>`;
     }
 
     const title1 = language==='he' ? 'חיתוכים' : 'Cuts';
@@ -2335,13 +2352,15 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                 const dsBtn = clonedArea.querySelector('#btn-display-settings');
                 if (dsBtn) dsBtn.remove();
                 // Increase spacing and allow wide tables/diagrams to fit page in PDF
-            const style2 = document.createElement('style');
-        style2.textContent = `
+        const style2 = document.createElement('style');
+    style2.textContent = `
                 .results-section { margin: 0 0 42px 0 !important; }
                 #results-area .x-scroll{ overflow: visible !important; }
                 table { margin: 0 0 24px 0 !important; max-width: 100% !important; table-layout: auto !important; }
                 thead, tbody, tr, th, td { box-sizing: border-box; }
-                .diagram{ display:block !important; }
+        .diagram{ display:block !important; }
+        /* Enlarge the plate size label under each plate image for PDF only */
+    svg .plate-size-label, img.diagram[data-kind="plate"] + .plate-size-label{ font-size: 26px !important; }
         `;
                 temp.appendChild(style2);
                 // Replace inline SVGs with PNG <img> to improve html2canvas reliability (esp. on mobile and file://)
@@ -2349,6 +2368,16 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                     const svgs = Array.from(root.querySelectorAll('svg.diagram'));
                     const tasks = svgs.map(svg => new Promise(resolve => {
                         try {
+                            // Bump the plate size label font before serialization so it is reflected in the rasterized image
+                            try {
+                                const kind = svg.getAttribute('data-kind') || '';
+                                if (kind === 'plate') {
+                                    const sizeLabel = svg.querySelector('text.plate-size-label');
+                                    if (sizeLabel) {
+                                        sizeLabel.setAttribute('font-size', '26');
+                                    }
+                                }
+                            } catch(_e) {}
                             const xml = new XMLSerializer().serializeToString(svg);
                             const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
                             const viewBox = (svg.getAttribute('viewBox')||'').trim().split(/\s+/).map(Number);
@@ -2403,18 +2432,39 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                 Array.from(clonedArea.querySelectorAll('img')).forEach(img => {
                     try { if (!/^https?:/i.test(img.src)) img.crossOrigin = 'anonymous'; } catch(_){}
                 });
-                // Perform SVG->IMG replacement on the cloned content before capture
-                await replaceSvgsWithImages(clonedArea);
-                // התאמת טבלת חיתוכים (הראשונה) שתתאים לרוחב הדף – הקטנה דינמית
+                                // Perform SVG->IMG replacement on the cloned content before capture
+                                await replaceSvgsWithImages(clonedArea);
+                                // Record diagram positions to avoid splitting them when slicing the canvas later
+                                let __diagCssRanges = [];
+                                let __tempWidthCss = 1100;
+                                try {
+                                    const tempRect = temp.getBoundingClientRect();
+                                    __tempWidthCss = Math.max(1, Math.round(tempRect.width));
+                                    const diagImgs = Array.from(clonedArea.querySelectorAll('img.diagram'));
+                                    __diagCssRanges = diagImgs.map(img => {
+                                        const r = img.getBoundingClientRect();
+                                        return { top: r.top - tempRect.top, bottom: r.bottom - tempRect.top };
+                                    });
+                                } catch(_){ __diagCssRanges = []; }
+                                // expose for later closure scope
+                                clonedArea.__diagCssRanges = __diagCssRanges;
+                                clonedArea.__tempWidthCss = __tempWidthCss;
+                                // התאמת טבלת חיתוכים (הראשונה) שתתאים לרוחב הדף – הקטנה דינמית + גלישת עמודת חיתוכים לשתי שורות
                 try {
-                    const allTables = Array.from(clonedArea.querySelectorAll('.results-section table'));
+                                        const allTables = Array.from(clonedArea.querySelectorAll('.results-section table'));
                     if (allTables.length) {
-                        const st = document.createElement('style');
-                        st.textContent = `.results-section table th, .results-section table td{ padding:6px 6px; }`;
+                                                const st = document.createElement('style');
+                                                st.textContent = `
+                                                    .results-section table{ table-layout:auto !important; width:auto !important; }
+                                                    .results-section table th, .results-section table td{ padding:6px 6px; vertical-align:middle; }
+                                                    /* Wrap long Cuts column into two lines if needed */
+                                                    .results-section table td.cuts, .results-section table th.cuts{ white-space:normal; max-width:360px; word-break:break-word; }
+                                                `;
                         temp.appendChild(st);
                         // allow layout to settle
                         await new Promise(r => setTimeout(r, 0));
-                        for (const tbl of allTables) {
+                                                for (let ti=0; ti<allTables.length; ti++) {
+                                                        const tbl = allTables[ti];
                             try {
                                 tbl.style.maxWidth = 'none';
                                 tbl.style.tableLayout = 'auto';
@@ -2424,13 +2474,34 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                                 let scale = 1;
                                 if (natural > available) scale = available / natural;
                                 scale = Math.max(0.6, Math.min(1, scale));
-                                if (scale < 1) {
+                                                                if (scale < 1) {
                                     tbl.style.transform = `scale(${scale})`;
                                     // לעקביות ומניעת חיתוך עמודות, תמיד עוגן משמאל
                                     tbl.style.transformOrigin = `top left`;
                                     tbl.style.display = 'inline-block';
                                     tbl.style.width = natural + 'px';
                                 }
+                                                                // Specifically mark the Cuts column cells on the first (top) table so CSS can wrap
+                                                                if (ti === 0) {
+                                                                    try {
+                                                                        const ths = Array.from(tbl.querySelectorAll('thead th'));
+                                                                        const cutsIdx = ths.findIndex(th => /חיתוכים|Cuts/.test(th.textContent||''));
+                                                                        if (cutsIdx >= 0) {
+                                                                            ths[cutsIdx].classList.add('cuts');
+                                                                            Array.from(tbl.querySelectorAll(`tbody tr`)).forEach(tr => {
+                                                                                const td = tr.children[cutsIdx];
+                                                                                if (td) td.classList.add('cuts');
+                                                                                // Optionally split very long comma-separated lists into two lines
+                                                                                if (td && (td.textContent||'').length > 60) {
+                                                                                    const txt = td.textContent;
+                                                                                    const parts = txt.split(/,\s*/);
+                                                                                    const half = Math.ceil(parts.length/2);
+                                                                                    td.innerHTML = `<div>${parts.slice(0,half).join(', ')}</div><div>${parts.slice(half).join(', ')}</div>`;
+                                                                                }
+                                                                            });
+                                                                        }
+                                                                    } catch(_){}
+                                                                }
                             } catch(_inner){}
                         }
                     }
@@ -2479,9 +2550,27 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                         } catch (_) { return false; }
                     }
                 });
+        // After capture: compute diagram ranges (in canvas px) to avoid splitting diagrams when paginating
+        let __diagRangesCanvas = [];
+        try {
+            const tempRect = temp.getBoundingClientRect();
+            const pxPerCss = canvas.width / Math.max(1, tempRect.width);
+            const blocks = Array.from(temp.querySelectorAll('.results-section'));
+            __diagRangesCanvas = blocks.map(sec => {
+                const img = sec.querySelector('img.diagram');
+                if (!img) return null;
+                const title = sec.querySelector('h3');
+                const rImg = img.getBoundingClientRect();
+                const rTitle = title ? title.getBoundingClientRect() : rImg;
+                const top = (rTitle.top - tempRect.top) * pxPerCss; // מתחיל מהכותרת
+                const bottom = (rImg.bottom - tempRect.top) * pxPerCss; // מסתיים בתחתית הדיאגרמה
+                return { top: Math.max(0, Math.floor(top)), bottom: Math.max(0, Math.floor(bottom)) };
+            }).filter(Boolean).filter(rb => rb.bottom > rb.top);
+        } catch(_){ __diagRangesCanvas = []; }
+
         document.body.removeChild(temp);
 
-        // Create PDF (A4 portrait)
+    // Create PDF (A4 portrait)
     const pdf = new jsPDFCtor('p', 'mm', 'a4');
         const pageW = pdf.internal.pageSize.getWidth();
         const pageH = pdf.internal.pageSize.getHeight();
@@ -2501,13 +2590,38 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
             ctx.drawImage(src, 0, sy, imgWpx, sh, 0, 0, imgWpx, sh);
             return pageCanvas.toDataURL('image/png');
         };
-        while (offsetYpx < imgHpx) {
-            const sliceHpx = Math.min(pageContentHpx, imgHpx - offsetYpx);
-            const dataUrl = makeSlice(canvas, offsetYpx, sliceHpx);
-            const sliceHmm = sliceHpx / pxPerMm;
-            pdf.addImage(dataUrl, 'PNG', margin, margin, pdfW, sliceHmm, undefined, 'FAST');
-            offsetYpx += sliceHpx;
-            if (offsetYpx < imgHpx) pdf.addPage();
+    // Compute safe page boundaries that never fall inside a diagram image
+    try {
+        const diagRanges = Array.isArray(__diagRangesCanvas) ? __diagRangesCanvas : [];
+        const minSlice = 1; // allow very small slices if needed to avoid cutting diagrams
+            while (offsetYpx < imgHpx) {
+                let candidate = Math.min(offsetYpx + pageContentHpx, imgHpx);
+                // If the boundary lies inside any diagram, move it up to just above that diagram
+                const inside = diagRanges.find(d => d.top < candidate && d.bottom > candidate);
+                if (inside) {
+            const adjusted = Math.max(offsetYpx + 1, inside.top - 2);
+                    if (adjusted - offsetYpx >= minSlice) {
+                        candidate = adjusted;
+                    }
+                    // else keep candidate as-is; we'll accept a very small slice to avoid infinite loop
+                }
+                const sliceHpx = Math.max(1, Math.min(candidate - offsetYpx, imgHpx - offsetYpx));
+                const dataUrl = makeSlice(canvas, offsetYpx, sliceHpx);
+                const sliceHmm = sliceHpx / pxPerMm;
+                pdf.addImage(dataUrl, 'PNG', margin, margin, pdfW, sliceHmm, undefined, 'FAST');
+                offsetYpx += sliceHpx;
+                if (offsetYpx < imgHpx) pdf.addPage();
+            }
+        } catch(_err) {
+            // Fallback to simple paging if anything goes wrong
+            while (offsetYpx < imgHpx) {
+                const sliceHpx = Math.min(pageContentHpx, imgHpx - offsetYpx);
+                const dataUrl = makeSlice(canvas, offsetYpx, sliceHpx);
+                const sliceHmm = sliceHpx / pxPerMm;
+                pdf.addImage(dataUrl, 'PNG', margin, margin, pdfW, sliceHmm, undefined, 'FAST');
+                offsetYpx += sliceHpx;
+                if (offsetYpx < imgHpx) pdf.addPage();
+            }
         }
 
         // Append a centered Hebrew quote and contact at the bottom of the LAST page
