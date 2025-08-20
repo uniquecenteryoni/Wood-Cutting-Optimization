@@ -22,11 +22,23 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="top-left"><button id="btn-lang" class="btn">english</button></div>
+    <div class="top-left">
+      <select id="select-lang" class="btn select">
+        <option value="he">🇮🇱 עברית</option>
+        <option value="en">🇺🇸 English</option>
+      </select>
+    </div>
     <div class="top-center"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="לוגו" /></div>
     <div class="top-actions">
-      <button id="btn-currency" class="btn">€</button>
-      <button id="btn-units" class="btn">m</button>
+      <select id="select-currency" class="btn select">
+        <option value="€" data-en="Euro">€ יורו</option>
+        <option value="$" data-en="Dollar">$ דולר</option>
+        <option value="₪" data-en="NIS">₪ שקל</option>
+      </select>
+      <select id="select-units" class="btn select" title="Units">
+        <option value="metric" data-en="Metric">מטרי</option>
+        <option value="imperial" data-en="Inches">אימפריאלי</option>
+      </select>
     </div>
     
   </header>

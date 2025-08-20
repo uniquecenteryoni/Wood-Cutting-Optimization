@@ -43,25 +43,43 @@ function submitContact(e) {
   const payload = validate(form);
   if (!payload) return;
 
-  const body = [
-    `שם: ${payload.fullName}`,
-    `אימייל: ${payload.email}`,
-    payload.phone ? `טלפון: ${payload.phone}` : null,
-    `נושא: ${payload.subject}`,
+  // Localize labels for the email body
+  const lang = currentLang();
+  const labels = lang === 'he'
+    ? { name: 'שם', email: 'אימייל', phone: 'טלפון', subject: 'נושא' }
+    : { name: 'Name', email: 'Email', phone: 'Phone', subject: 'Subject' };
+
+  // Build plain-text body and then URL-encode it safely
+  const lines = [
+    `${labels.name}: ${payload.fullName}`,
+    `${labels.email}: ${payload.email}`,
+    payload.phone ? `${labels.phone}: ${payload.phone}` : null,
+    `${labels.subject}: ${payload.subject}`,
     '---',
     payload.message
-  ].filter(Boolean).join('%0D%0A');
+  ].filter(Boolean);
+  const bodyText = lines.join('\r\n');
+  const bodyParam = encodeURIComponent(bodyText);
 
-  const mailto = `mailto:unique.center.yoni@gmail.com?subject=${encodeURIComponent(payload.subject)}&body=${body}`;
-  window.location.href = mailto;
-
+  // Show status before triggering the mail client
   const status = document.getElementById('form-status');
-  status.textContent = t[currentLang()].sending;
+  if (status) status.textContent = t[lang].sending;
+
+  const mailto = `mailto:unique.center.yoni@gmail.com?subject=${encodeURIComponent(payload.subject)}&body=${bodyParam}`;
+  window.location.href = mailto;
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('contact-form');
-  if (form) form.addEventListener('submit', submitContact);
+  if (form) {
+    form.addEventListener('submit', submitContact);
+    // Clear status on input/reset for better UX
+    try {
+      const status = document.getElementById('form-status');
+      form.addEventListener('input', () => { if (status) status.textContent = ''; });
+      form.addEventListener('reset', () => { if (status) status.textContent = ''; });
+    } catch {}
+  }
   // Localize labels/placeholders
   const lang = currentLang();
   const h2 = document.querySelector('main .card h2');

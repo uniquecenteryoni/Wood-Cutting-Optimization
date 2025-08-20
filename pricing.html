@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>מחירון</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Pricing page styles (scoped to this page) */
+    .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px;align-items:stretch}
+    .price-card{display:flex;flex-direction:column;justify-content:space-between;min-height:560px;padding:16px;transition:transform .15s ease, box-shadow .15s ease, background-color .15s ease}
+    .price-card:hover{transform:translateY(-4px);box-shadow:0 6px 20px rgba(0,0,0,.08);background:linear-gradient(0deg, rgba(46,125,50,0.06), rgba(46,125,50,0.06))}
+    .price-card h3{margin:0 0 6px;text-align:center;font-size:26px}
+    .price-card .price{margin:0 0 10px;text-align:center;color:#2e7d32;font-weight:700;font-size:32px}
+    .plan-body{flex:1;display:flex;flex-direction:column;justify-content:flex-start}
+    .feat-list{margin-top:12px;text-align:center}
+    .feat{margin:8px 0}
+    /* De-emphasize all texts by default */
+    .feat .title{font-weight:400}
+    .feat .value{margin-top:4px;font-weight:400}
+    /* Only emphasize numbers under rows starting with "מספר..." (feat-number) */
+    .feat-number .value{font-weight:700}
+    /* Boolean rows: keep icon on the right side in both RTL and LTR */
+    .feat-bool{display:flex;align-items:center;justify-content:center;gap:8px;flex-direction:row}
+    html[dir="rtl"] .feat-bool .icon{order:1}
+    html[dir="rtl"] .feat-bool .title{order:2}
+    html[dir="ltr"] .feat-bool .icon{order:2}
+    html[dir="ltr"] .feat-bool .title{order:1}
+    .icon{font-size:18px;line-height:1;display:inline-flex;align-items:center}
+    .icon.yes{color:#2e7d32}
+    .icon.no{color:#c62828}
+    .plan-actions{margin-top:14px;display:flex;justify-content:center}
+    .plan-actions .btn{text-decoration:none;border-bottom:none}
+  /* Ensure Basic plan button is styled same as others (handled via .btn.primary class in markup) */
+  /* Business plan list: center and remove bullets */
+  .price-card .feat-list ul{list-style:none;margin:0;padding:0;text-align:center}
+  .price-card .feat-list li{font-weight:400}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-left">
+      <select id="select-lang" class="btn select">
+        <option value="he">🇮🇱 עברית</option>
+        <option value="en">🇺🇸 English</option>
+      </select>
+    </div>
+    <div class="top-center"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="לוגו" /></div>
+    <div class="top-actions">
+      <select id="select-currency" class="btn select">
+        <option value="€" data-en="Euro">€ יורו</option>
+        <option value="$" data-en="Dollar">$ דולר</option>
+        <option value="₪" data-en="NIS">₪ שקל</option>
+      </select>
+      <select id="select-units" class="btn select" title="Units">
+        <option value="metric" data-en="Metric">מטרי</option>
+        <option value="imperial" data-en="Inches">אימפריאלי</option>
+      </select>
+    </div>
+  </header>
+  <nav class="main-nav" aria-label="primary">
+    <div class="nav-wrap">
+      <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+      <a href="about.html" class="nav-link">אודות</a>
+      <a href="pricing.html" class="nav-link active">מחירון</a>
+      <a href="plans.html" class="nav-link">תוכניות בנייה להורדה</a>
+      <a href="contact.html" class="nav-link">צור קשר</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <section class="card">
+      <div class="pricing-grid">
+        <!-- Order: Basic, Hobby, Pro, Business -->
+  <div class="price-card card basic">
+          <h3 id="title-basic">בסיסי</h3>
+          <div class="price" id="price-basic">€0/חודש</div>
+          <div class="plan-body">
+            <div class="feat-list">
+              <div class="feat feat-number"><div class="title" data-key="parts">מספר חלקים לפרויקט</div><div class="value">100</div></div>
+              <div class="feat feat-number"><div class="title" data-key="items">מספר פריטים במאגר</div><div class="value">10</div></div>
+              <div class="feat feat-number"><div class="title" data-key="suppliers">מספר ספקים במאגר</div><div class="value">5</div></div>
+              <div class="feat feat-bool"><span class="title" data-key="algo">אלגוריתם מיטבי לחישוב</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="pdf">יצוא קובץ pdf</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="mincost">עלות מינימלית</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="tags">תיוג חלקים בפלט</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="save">שמירת פרוייקטים</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="custom">הוספת שדות בהתאמה אישית (מיועד לאנשים שרוצים לשמור יותר מרק שם הפרויקט)</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="products">מס מוצרים אפשריים</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="materials">חומרים שונים</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="roll">חומר מתגלגל</span><span class="icon no">✖</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="plans">תוכניות בנייה</span><span class="icon no">✖</span></div>
+              <div class="feat"><div class="value" data-key="no-discount" style="font-weight:400">לא כולל הנחה</div></div>
+            </div>
+            <div class="plan-actions"><a class="btn primary" href="checkout.html?plan=basic" id="buy-basic">רכישה</a></div>
+          </div>
+        </div>
+
+        <div class="price-card card">
+          <h3 id="title-hobby">נגר חובב</h3>
+          <div class="price" id="price-hobby">€6/חודש</div>
+          <div class="plan-body">
+            <div class="feat-list">
+              <div class="feat feat-number"><div class="title" data-key="parts">מספר חלקים לפרויקט</div><div class="value">1000</div></div>
+              <div class="feat feat-number"><div class="title" data-key="items">מספר פריטים במאגר</div><div class="value">50</div></div>
+              <div class="feat feat-number"><div class="title" data-key="suppliers">מספר ספקים במאגר</div><div class="value">10</div></div>
+              <div class="feat feat-bool"><span class="title" data-key="algo">אלגוריתם מיטבי לחישוב</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="pdf">יצוא קובץ pdf</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="mincost">עלות מינימלית</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="tags">תיוג חלקים בפלט</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="save">שמירת פרוייקטים</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="custom">הוספת שדות בהתאמה אישית (מיועד לאנשים שרוצים לשמור יותר מרק שם הפרויקט)</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="products">מס מוצרים אפשריים</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="materials">חומרים שונים</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="roll">חומר מתגלגל</span><span class="icon no">✖</span></div>
+              <div class="feat"><div class="title" data-key="plans">תוכניות בנייה</div><div class="value" data-key="plans-disc">50% הנחה</div></div>
+            </div>
+            <div class="plan-actions"><a class="btn primary" href="checkout.html?plan=hobby" id="buy-hobby">רכישה</a></div>
+          </div>
+        </div>
+
+        <div class="price-card card">
+          <h3 id="title-pro">נגר מקצועי</h3>
+          <div class="price" id="price-pro">€15/חודש</div>
+          <div class="plan-body">
+            <div class="feat-list">
+              <div class="feat feat-number"><div class="title" data-key="parts">מספר חלקים לפרויקט</div><div class="value">ללא הגבלה</div></div>
+              <div class="feat feat-number"><div class="title" data-key="items">מספר פריטים במאגר</div><div class="value">ללא הגבלה</div></div>
+              <div class="feat feat-number"><div class="title" data-key="suppliers">מספר ספקים במאגר</div><div class="value">לא הגבלה</div></div>
+              <div class="feat feat-bool"><span class="title" data-key="algo">אלגוריתם מיטבי לחישוב</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="pdf">יצוא קובץ pdf</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="mincost">עלות מינימלית</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="tags">תיוג חלקים בפלט</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="save">שמירת פרוייקטים</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="custom">הוספת שדות בהתאמה אישית (מיועד לאנשים שרוצים לשמור יותר מרק שם הפרויקט)</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="products">מס מוצרים אפשריים</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="materials">חומרים שונים</span><span class="icon yes">✔</span></div>
+              <div class="feat feat-bool"><span class="title" data-key="roll">חומר מתגלגל</span><span class="icon yes">✔</span></div>
+              <div class="feat"><div class="title" data-key="plans">תוכניות בנייה</div><div class="value" data-key="plans-incl">כלול - ללא עלות נוספת</div></div>
+            </div>
+            <div class="plan-actions"><a class="btn primary" href="checkout.html?plan=pro" id="buy-pro">רכישה</a></div>
+          </div>
+        </div>
+
+        <div class="price-card card">
+          <h3 id="title-biz">בעלי עסקים</h3>
+          <div class="price" id="price-biz">€90/חודש</div>
+          <div class="plan-body">
+            <div class="feat-list">
+              <ul>
+                <li data-key="biz_all">כל התכונות של נגר מקצועי</li>
+                <li data-key="biz_integration">ממשוק המערכת להזמנות - בניית פלטפורמה ייחודית ללקוח דרך האתר שלכם</li>
+                <li data-key="biz_custom">התאמה והטמעה מותאמת אישית לבעל העסק</li>
+              </ul>
+            </div>
+            <div class="plan-actions"><a class="btn primary" href="checkout.html?plan=biz" id="buy-biz">רכישה</a></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>Wood Optimizer</small>
+  </footer>
+  <script src="site.js"></script>
+  <script>
+    (function(){
+      // Helpers
+      function readStr(key, fb){ const raw = localStorage.getItem(key); if(raw==null) return fb; try{ const p=JSON.parse(raw); return typeof p==='string'?p:raw; }catch{ return raw; } }
+      function lang(){ return (readStr('lang','he')||'he').replace(/^"|"$/g,'').toLowerCase(); }
+      function symbol(){ const s=(readStr('currencySymbol','')||'').replace(/["'״]/g,''); if (s) return s; const c=(readStr('currency','EUR')||'EUR').toUpperCase(); return c==='USD'?'$':c==='ILS'?'₪':'€'; }
+      const rates = { '€':1, '$':1.1, '₪':4.0 };
+      const i18n = {
+        he: {
+          titles: { basic:'בסיסי', hobby:'נגר חובב', pro:'נגר מקצועי', biz:'בעלי עסקים' },
+          labels: {
+            parts:'מספר חלקים לפרויקט', items:'מספר פריטים במאגר', suppliers:'מספר ספקים במאגר',
+            algo:'אלגוריתם מיטבי לחישוב', pdf:'יצוא קובץ pdf', mincost:'עלות מינימלית', tags:'תיוג חלקים בפלט', save:'שמירת פרוייקטים',
+            custom:'הוספת שדות בהתאמה אישית (מיועד לאנשים שרוצים לשמור יותר מרק שם הפרויקט)', products:'מס מוצרים אפשריים', materials:'חומרים שונים', roll:'חומר מתגלגל',
+            plans:'תוכניות בנייה', 'no-discount':'לא כולל הנחה', 'plans-disc':'50% הנחה', 'plans-incl':'כלול - ללא עלות נוספת', buy:'רכישה',
+            biz_all:'כל התכונות של נגר מקצועי', biz_integration:'ממשוק המערכת להזמנות - בניית פלטפורמה ייחודית ללקוח דרך האתר שלכם', biz_custom:'התאמה והטמעה מותאמת אישית לבעל העסק'
+          }, perMonth:'/חודש'
+        },
+        en: {
+          titles: { basic:'Basic', hobby:'Hobby Woodworker', pro:'Professional', biz:'Business' },
+          labels: {
+            parts:'Parts per project', items:'Items in inventory', suppliers:'Suppliers in inventory',
+            algo:'Optimal algorithm', pdf:'PDF export', mincost:'Minimum cost', tags:'Part labeling', save:'Project saving',
+            custom:'Custom fields (for saving more than just the project name)', products:'Max possible products', materials:'Different materials', roll:'Roll material',
+            plans:'Building plans', 'no-discount':'No discount included', 'plans-disc':'50% discount', 'plans-incl':'Included - no extra cost', buy:'Buy',
+            biz_all:'All Professional features', biz_integration:'Order integration — a custom platform on your site', biz_custom:'Custom implementation for your business'
+          }, perMonth:'/month'
+        }
+      };
+      function updatePrices(){
+        const s = symbol(); const r = rates[s]||1; const suf = i18n[lang()].perMonth;
+        function set(id, eur){ const el=document.getElementById(id); if(!el) return; const val = eur*r; el.textContent = s + (eur===0? '0' : String(Math.round(val))) + suf; }
+        set('price-basic', 0); set('price-hobby', 6); set('price-pro', 15); set('price-biz', 90);
+      }
+      function localize(){
+        const L = i18n[lang()]||i18n.he;
+        const byId = (id, v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+        byId('title-basic', L.titles.basic);
+        byId('title-hobby', L.titles.hobby);
+        byId('title-pro', L.titles.pro);
+        byId('title-biz', L.titles.biz);
+        document.querySelectorAll('[data-key]').forEach(el=>{
+          const k = el.getAttribute('data-key');
+          const val = L.labels[k] || L.labels[k.replace(/-/g,'_')] || el.textContent;
+          if (val) el.textContent = val;
+        });
+        // Buttons
+        ['buy-basic','buy-hobby','buy-pro','buy-biz'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = L.labels.buy; });
+      }
+      document.addEventListener('DOMContentLoaded', ()=>{ localize(); updatePrices(); });
+    })();
+  </script>
+</body>
+</html>

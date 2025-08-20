@@ -39,7 +39,7 @@ html[dir="rtl"] .container, html[dir="rtl"] .card{ text-align:right }
 html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
 .topbar{display:flex;align-items:center;justify-content:center;padding:calc(10px + env(safe-area-inset-top)) 8px 10px;background:var(--head2);box-shadow:0 1px 4px rgba(0,0,0,.06);border-bottom:1px solid var(--border);position:relative;min-height:128px; width:100%; margin:0}
 .site-title{margin:0 auto;text-align:center;font-size:28px;background:transparent;padding:6px 12px;border-radius:10px;display:inline-block}
-.top-left{position:absolute;left:14px;top:0;bottom:auto;display:flex;align-items:center;margin-top:6px; z-index:2}
+.top-left{position:absolute;left:clamp(12px, 2.5vw, 24px);top:0;bottom:auto;display:flex;align-items:center;margin-top:6px; z-index:2}
 .top-center{position:absolute;left:50%;top:6px;bottom:6px;transform:translateX(-50%);display:flex;align-items:center}
 .site-logo{height:100%;width:auto;display:block;border:none;border-radius:0;background:transparent}
 .top-actions{display:flex;gap:10px;position:absolute;top:10px;right:14px}
@@ -99,6 +99,12 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .btn.primary:hover{background:#5b7f5c}
 .btn.pink{background:var(--accent);color:white;border:none}
 .btn.pink:hover{background:#a66f62}
+select.btn{font:inherit}
+/* Generic select fallback to match .btn.select look */
+select{background-color:#fff}
+select:not(.btn){padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;min-height:38px;line-height:1.25}
+/* RTL: place dropdown arrow on the left side for Hebrew */
+html[dir="rtl"] .btn.select{padding-right:12px; padding-left:28px; background-position:8px 50%}
 /* Pistachio Save buttons */
 .btn.btn-save, .btn.btn-save-new, #project-name-ok{
 	background:var(--head2); /* match site title background */
@@ -115,23 +121,52 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .inline{display:flex;gap:6px;align-items:center}
 .chip{display:inline-block;padding:0 6px;border-radius:10px;background:#eee;font-size:12px}
 .hidden{display:none}
-#requirements-list .req-row{display:grid;grid-template-columns: auto auto auto auto auto auto;gap:2px;align-items:center;padding:6px 0;border-bottom:1px dashed #eee;width:auto}
-#requirements-list .req-row select, #requirements-list .req-row input{width:auto;min-width:84px;max-width:126px}
-.req-row select,.req-row input{padding:3px 6px}
-.req-row select,.req-row input{padding:6px;border:1px solid #ddd;border-radius:6px;width:100%;min-width:0}
+.req-row{max-width:75vw}
+#requirements-list .req-row{display:flex;flex-wrap:nowrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed #eee;width:100%;overflow-x:auto}
+#requirements-list .req-row::-webkit-scrollbar{height:10px}
+#requirements-list .req-row select, #requirements-list .req-row input{min-height:40px}
+.req-row select,.req-row input{padding:10px 12px}
+.req-row select,.req-row input{border:1px solid #ddd;border-radius:8px;min-width:120px;width:auto;flex:0 0 auto}
+#requirements-list .req-row select,.req-row input{border:1px solid #ddd;border-radius:8px;min-width:0;width:auto;flex:0 0 auto}
+/* Fixed width for requirement fields with ellipsis to avoid growing */
+#requirements-list .req-row select,
+#requirements-list .req-row input[type="text"],
+#requirements-list .req-row input[type="number"]{
+	flex:0 0 150px;
+	max-width:150px;
+	text-overflow:ellipsis;
+	overflow:hidden;
+	white-space:nowrap;
+}
+#requirements-list .req-row input[data-field="length"],
+#requirements-list .req-row input[data-field="qty"]{flex-basis:110px;max-width:110px}
+#requirements-list .req-row input[data-field="tag"]{flex-basis:140px;max-width:140px}
 .req-row .btn-remove{
 	background:#e57373; /* softer red */
 	color:#fff;
 	border:1px solid #d32f2f;
 	font-weight:700;
 }
+.req-row .btn-duplicate{
+	/* match shape/size of remove button but with site hover pastel color */
+	background:var(--head2);
+	color:#000;
+	border:1px solid #d2e4d2;
+	font-weight:700;
+	font-size:18px; min-width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center;
+}
+.req-row .btn-remove{ height:40px; display:inline-flex; align-items:center; justify-content:center }
+.req-row .btn-duplicate:hover{background:#d9e9d9}
 .req-row .btn-remove:hover{background:#d32f2f;border-color:#b71c1c;color:#fff}
 .req-row .btn-remove:active{background:#c62828;border-color:#8e1111;color:#fff}
 .req-row .btn-remove:focus{outline:none;box-shadow:0 0 0 3px rgba(211,47,47,.25)}
+/* RTL: in display settings panel, place control to the left of the text */
+html[dir="rtl"] #display-settings-panel label > span:first-child{ order:2 }
+html[dir="rtl"] #display-settings-panel label > select,
+html[dir="rtl"] #display-settings-panel label > span[id$="-switch"]{ order:1 }
 @media(max-width: 900px){
-	#requirements-list .req-row{grid-template-columns: 1fr 1fr}
-	#requirements-list .req-row > *:nth-child(5){grid-column:1/2}
-	#requirements-list .req-row > *:nth-child(6){grid-column:2/3; justify-self:end}
+	/* שמירה על שורה אחת גם במובייל עם גלילה אופקית */
+	#requirements-list .req-row{display:flex;flex-wrap:nowrap}
 }
 .db-table{width:max-content; min-width:100%; border-collapse:collapse; table-layout:auto}
 /* Tables inherit page direction; inventory uses dir attribute at runtime */
@@ -183,16 +218,34 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 .db-head{margin-top:32px}
 #block-req .actions.actions-center{margin-top:32px}
 .footer{padding:8px;text-align:center;color:var(--muted);font-size:12px}
+.footer .footer-inner{display:inline-flex; gap:8px; align-items:center}
+.footer .footer-logo{width:18px; height:18px; object-fit:contain; border-radius:2px}
 .file-btn input{display:none}
 .file-btn{display:inline-flex;align-items:center;gap:8px}
 .file-btn span{font:inherit}
 .req-row .small{font-size:12px;color:var(--muted)}
 .results-section{margin-top:24px}
+/* Right-align results section titles and use standard table font size */
+.results-section > h3{margin:0 0 8px; text-align:right; font-size:20px}
+.results-section > .x-scroll{margin-top:8px}
+/* Add a small gap between each item title and its diagram */
+.results-section h3 + .diagram{margin-top:8px}
+.spacer-row{height:8px}
 .diagram{border:none;border-radius:0;padding:8px;background:#fff; touch-action:pan-x pan-y}
 .diagram text{pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; user-select:none}
+.diagram rect[data-piece="1"]{transition:filter .15s ease, opacity .15s ease}
+/* Ensure waste/kerf hatch overlay doesn't block hover */
+.diagram .non-interactive{pointer-events:none}
+@media (hover:hover){
+	.diagram rect[data-piece="1"]:hover{filter:brightness(1.08)}
+}
 .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .legend .item{display:flex;gap:6px;align-items:center}
 .pastel{border-radius:4px;width:20px;height:14px}
+/* Small lock badge styling used next to premium toggles */
+.lock{display:inline-flex; align-items:center; justify-content:center; font-size:14px; line-height:1; width:18px; height:18px; border-radius:50%; background:transparent; border:1px solid #ddd}
+/* Dim switches when locked via data-locked */
+.switch[data-locked="1"]{opacity:.5; cursor:not-allowed}
 /* Loader overlay (full-screen) */
 .loader-overlay{
 	position:fixed;
@@ -209,7 +262,7 @@ html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -ap
 @media(max-width:700px){
 	.lottie-box{width:clamp(220px, 70vw, 420px); height:clamp(220px, 70vw, 420px)}
 }
-.loader-text{margin-top:8px;font-size:26px;line-height:1.3;color:#2b2b2b;text-align:center;max-width:86%;font-weight:800}
+.loader-text{margin-top:10px;font-size:26px;line-height:1.2;color:#2b2b2b;text-align:center;max-width:86%;font-weight:800; margin-bottom:0}
 html[dir="rtl"] .loader-text{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial}
 html[dir="ltr"] .loader-text{font-family:'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial}
 .hidden{display:none}
@@ -276,11 +329,15 @@ html[dir="ltr"] .loader-text{font-family:'Josefin Sans Variable', 'Rubik', syste
 #block-db .card-head h2, #block-res h2{font-size:36px}
 /* Normalize Block 3 title spacing and alignment */
 #block-res h2{margin:0 auto}
-.results-section > h3{margin:0 auto; text-align:center; font-size:22px}
+/* Ensure results section subtitles are right-aligned and compact */
+.results-section > h3{margin:0 0 8px; text-align:right}
+/* Distinguish section titles (tables/maps) vs item titles (each diagram) */
+.results-section > h3.section-title{font-size:20px; text-align:center}
+.results-section h3.item-title{font-size:16px}
 .results-section > .x-scroll{margin:10px 0 0 0;}
-#results-area .results-section + .results-section{margin-top:32px}
+#results-area .results-section + .results-section{margin-top:40px}
 #block-res h2 + #results-area{margin-top:16px}
-#results-area{max-width:100%; overflow:visible; padding-left:clamp(8px, 3vw, 40px); padding-right:clamp(8px, 3vw, 40px)}
+#results-area{max-width:100%; overflow:visible; padding-left:clamp(12px, 2.5vw, 24px); padding-right:clamp(12px, 2.5vw, 24px)}
 .container #block-res{ overflow-x:hidden }
 #results-area{ overflow-x:hidden }
 .no-results{margin:0 auto; text-align:center; display:block; padding:8px 12px}
@@ -389,6 +446,17 @@ body.initial-compact-tight h2{font-size:28px}
 /* Mobile enhancements: safer text scaling, fluid diagrams, table scroll, and narrow stacking */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .no-x-scroll, html, body{max-width:100vw; width:100%; overflow-x:hidden}
+
+/* Saw popover panel (dynamic content) */
+.saw-popover{position:fixed;left:14px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;box-shadow:0 8px 28px rgba(0,0,0,.16);min-width:320px;z-index:1100;text-align:left}
+.saw-popover .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.saw-popover .switch{width:44px;height:24px;border-radius:12px;background:#c7c7c7;position:relative;cursor:pointer}
+.saw-popover .switch[data-on="1"]{background:#4caf50}
+.saw-popover .switch .knob{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s}
+.saw-popover .switch[data-on="1"] .knob{left:22px}
+.saw-popover .trim-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.saw-popover .trim-grid input{min-height:34px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;width:100%}
+.saw-popover input[type="number"], .saw-popover input[type="text"]{min-height:34px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box}
 @supports (padding: max(0px)){
 	body{ width:100vw; }
 }
@@ -472,7 +540,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 
 /* Final header cleanup: keep only name field and saw icon visible in Block 1 */
 #block-req #project-name-ok{ display:none !important }
-#block-req #saw-popover{ display:none !important }
+
 /* RTL: make the first dot appear on the right */
 html[dir="rtl"] .plan-card .thumb .dots{flex-direction:row-reverse}
 /* Slide transition between images on tap */
@@ -484,7 +552,7 @@ html[dir="rtl"] .plan-card .thumb .dots{flex-direction:row-reverse}
 
 /* Global centered modal for errors and alerts */
 .global-modal{position:fixed; inset:0; z-index:1300; display:flex; align-items:center; justify-content:center}
-.global-modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.35); backdrop-filter:saturate(120%) blur(2px)}
+.global-modal-backdrop{position:absolute; inset:0; background:transparent; backdrop-filter:none; pointer-events:none}
 .global-modal-box{position:relative; z-index:1; width:min(92vw, 560px); background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 36px rgba(0,0,0,.22); padding:16px}
 .global-modal-title{margin:0 0 8px}
 .global-modal-body{color:#8a1f1f; background:#fff8f8; border:1px solid #f2c6c6; border-left:4px solid #d32f2f; border-radius:10px; padding:10px}
@@ -509,9 +577,9 @@ html[dir="rtl"] .plan-card .thumb .dots{flex-direction:row-reverse}
 .card-head .req-saw{display:none !important}
 #block-req .card-head{align-items:stretch}
 #block-req .card-head h2{align-self:center}
-#saw-settings-btn{position:absolute; top:0; left:0}
-html[dir="rtl"] #saw-settings-btn{right:auto; left:3px}
-html[dir="ltr"] #saw-settings-btn{left:3px}
+#saw-settings-btn{position:absolute; top:0; left:clamp(12px, 2.5vw, 24px)}
+html[dir="rtl"] #saw-settings-btn{right:auto; left:clamp(12px, 2.5vw, 24px)}
+html[dir="ltr"] #saw-settings-btn{left:clamp(12px, 2.5vw, 24px)}
 .card-head .req-name{position:absolute; top:0; right:3px}
 
 /* Desktop: place Block 1 header controls right under the nav separator */
@@ -554,9 +622,30 @@ html[dir="ltr"] #saw-settings-btn{left:3px}
 		#block-req{display:flex; flex-direction:column; position:relative}
 	/* Mobile saw settings trigger */
 		#saw-settings-btn{display:inline-flex !important; position:absolute; top:3px; right:auto; font-size:20px; width:40px; height:40px; align-items:center; justify-content:center}
-		html[dir="rtl"] #saw-settings-btn{left:3px}
-		html[dir="ltr"] #saw-settings-btn{left:3px}
+			html[dir="rtl"] #saw-settings-btn{left:clamp(12px, 2.5vw, 24px)}
+			html[dir="ltr"] #saw-settings-btn{left:clamp(12px, 2.5vw, 24px)}
 		.saw-popover{position:absolute; top:48px; left:0; right:auto; background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.16); z-index:20}
 	/* Spacing when project name sits below the buttons */
 		#block-req .req-name.is-mobile-below{display:none !important}
+}
+
+/* Results: give a bit more breathing room before the cutting map heading */
+#block-res .results-section h3{margin-top:8px}
+#block-res .results-section:last-of-type h3{margin-top:16px}
+
+/* Plate diagrams: ensure left gutter for vertical ruler/labels roughly matches the top gutter */
+svg.diagram[data-kind="plate"]{margin-left:12px}
+
+/* Block 3 (Display settings) — tighter spacing and compact controls */
+#display-settings{ margin:6px 0 !important; padding-left:clamp(12px, 2.5vw, 24px); padding-right:clamp(12px, 2.5vw, 24px) }
+#display-settings-panel{ gap:10px !important; padding:8px 10px !important }
+#display-settings-panel label{ gap:8px !important }
+#display-settings-panel select.btn{
+	padding:4px 10px;
+	height:auto;
+	min-height:34px;
+	line-height:1.2;
+	text-align-last:center; /* center selected text */
+	-moz-text-align-last:center; /* firefox */
+	white-space:nowrap;
 }

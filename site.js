@@ -44,12 +44,23 @@
     if (bLang) bLang.textContent = lang()==='he' ? 'english' : 'עברית';
     const bCur = el('#btn-currency');
     if (bCur) {
-  const storedSym = (readStr('currencySymbol', '') || '').replace(/["'״]/g,'');
-  const sym = storedSym && /[€$₪]/.test(storedSym) ? storedSym : symbolFromCurrency(currency());
-  bCur.textContent = sym || '€';
+      const storedSym = (readStr('currencySymbol', '') || '').replace(/["'״]/g,'');
+      const sym = storedSym && /[€$₪]/.test(storedSym) ? storedSym : symbolFromCurrency(currency());
+      if (lang()==='en') {
+        const map = { '€':'Euro', '$':'Dollar', '₪':'Shekel' };
+        bCur.textContent = map[sym] || 'Euro';
+      } else {
+        bCur.textContent = sym || '€';
+      }
     }
     const bUnits = el('#btn-units');
-    if (bUnits) bUnits.textContent = unit()==='metric' ? 'm' : 'inch';
+    if (bUnits) {
+      if (lang()==='en') {
+        bUnits.textContent = unit()==='metric' ? 'meter' : 'inch';
+      } else {
+        bUnits.textContent = unit()==='metric' ? 'm' : 'inch';
+      }
+    }
   }
 
   function symbolFromCurrency(cur){
@@ -222,57 +233,107 @@
       mo.observe(document.body, { childList:true, subtree:true });
     }catch{}
 
-    // Localize nav and page titles
+    // Build & localize nav (desktop + mobile) with required order; keep Pricing persistent
     try {
       const isHe = lang()==='he';
       const labels = {
-        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', about: 'אודות', contact: 'צור קשר' },
-        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    about: 'About',  contact: 'Contact' }
+        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
+        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    about: 'About',  pricing: 'Price List', contact: 'Contact' }
       };
       const pageTitles = {
-  he: { plans: 'תוכניות בנייה להורדה', about: 'אודות', contact: 'צור קשר' },
-  en: { plans: 'Downloadable Plans',    about: 'About', contact: 'Contact' }
+        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
+        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    about: 'About',  pricing: 'Price List', contact: 'Contact' }
       };
-  const links = Array.from(document.querySelectorAll('.main-nav .nav-wrap a, #mobile-drawer a'));
-      links.forEach(a => {
-        const href = (a.getAttribute('href')||'').split('?')[0];
-        if (href.endsWith('index.html')) a.textContent = labels[isHe?'he':'en'].index;
-        else if (href.endsWith('plans.html')) a.textContent = labels[isHe?'he':'en'].plans;
-        else if (href.endsWith('about.html')) a.textContent = labels[isHe?'he':'en'].about;
-        else if (href.endsWith('contact.html')) a.textContent = labels[isHe?'he':'en'].contact;
-      });
-      // Update top header title for non-index pages
+      const navOrder = [
+        { href: 'index.html',   key: 'index'   },
+        { href: 'plans.html',   key: 'plans'   },
+        { href: 'about.html',   key: 'about'   },
+        { href: 'pricing.html', key: 'pricing' },
+        { href: 'contact.html', key: 'contact' }
+      ];
+      const buildNavHtml = (activePath) => navOrder.map(item => {
+        const text = labels[isHe?'he':'en'][item.key];
+        const isActive = activePath.endsWith('/'+item.href) || activePath.endsWith(item.href) || (item.key==='index' && /\/(?:index.html)?$/.test(activePath));
+        return `<a href="${item.href}" class="nav-link${isActive?' active':''}">${text}</a>`;
+      }).join('');
+
       const path = (location.pathname||'').toLowerCase();
-      const siteTitle = document.querySelector('.topbar .site-title');
-      if (siteTitle) {
-        // Always brand with site name; use document.title to reflect page
-        const siteName = isHe ? 'עבודת עץ' : 'wood lab';
-        siteTitle.textContent = siteName;
-        if (path.endsWith('/plans.html') || path.endsWith('plans.html')) {
-          document.title = pageTitles[isHe?'he':'en'].plans;
-        } else if (path.endsWith('/about.html') || path.endsWith('about.html')) {
-          document.title = pageTitles[isHe?'he':'en'].about;
-        } else if (path.endsWith('/contact.html') || path.endsWith('contact.html')) {
-          document.title = pageTitles[isHe?'he':'en'].contact;
-        } else if (path.endsWith('/index.html') || /\/(?:index.html)?$/.test(path)) {
-          document.title = siteName;
-        }
-      }
+      // Desktop nav
+      const wrap = document.querySelector('.main-nav .nav-wrap');
+      if (wrap) wrap.innerHTML = buildNavHtml(path);
+      // Mobile drawer nav (if present)
+      const mobileNav = document.querySelector('#mobile-drawer nav[aria-label="mobile"]');
+      if (mobileNav) mobileNav.innerHTML = buildNavHtml(path);
+
+      // Update document title
+      const isIndex = path.endsWith('/index.html') || /\/(?:index.html)?$/.test(path);
+      if (isIndex) document.title = pageTitles[isHe?'he':'en'].index;
+      else if (path.endsWith('plans.html')) document.title = pageTitles[isHe?'he':'en'].plans;
+      else if (path.endsWith('about.html')) document.title = pageTitles[isHe?'he':'en'].about;
+      else if (path.endsWith('pricing.html')) document.title = pageTitles[isHe?'he':'en'].pricing;
+      else if (path.endsWith('contact.html')) document.title = pageTitles[isHe?'he':'en'].contact;
     } catch(e){}
-    const bLang = el('#btn-lang');
-    if (bLang) bLang.addEventListener('click', toggleLang);
-    const bUnits = el('#btn-units');
-    if (bUnits) bUnits.addEventListener('click', toggleUnits);
-    const bCur = el('#btn-currency');
-    if (bCur) bCur.addEventListener('click', cycleCurrency);
+    // Header buttons (if present)
+    const bLang = el('#btn-lang'); if (bLang) bLang.addEventListener('click', toggleLang);
+    const bUnits = el('#btn-units'); if (bUnits) bUnits.addEventListener('click', toggleUnits);
+    const bCur = el('#btn-currency'); if (bCur) bCur.addEventListener('click', cycleCurrency);
+    // Header selects (all pages) — sync to global state and localize labels
+    try {
+      const selLang = el('#select-lang');
+      if (selLang) {
+        try { selLang.value = lang(); } catch{}
+        selLang.addEventListener('change', (e)=>{ setLang(e.target.value); location.reload(); });
+      }
+      const selUnits = el('#select-units');
+      if (selUnits) {
+        // Localize option labels for English
+        try {
+          const isHe = lang()==='he';
+          selUnits.querySelectorAll('option').forEach(opt=>{
+            const en = opt.getAttribute('data-en');
+            if (!isHe && en) opt.textContent = en;
+            if (isHe && en) {
+              // revert to Hebrew already in markup
+            }
+          });
+        } catch{}
+        try { selUnits.value = unit(); } catch{}
+        selUnits.addEventListener('change', (e)=>{ setUnit(e.target.value); location.reload(); });
+      }
+      const selCur = el('#select-currency');
+      if (selCur) {
+        // Localize option labels for English
+        try {
+          const isHe = lang()==='he';
+          selCur.querySelectorAll('option').forEach(opt=>{
+            const en = opt.getAttribute('data-en');
+            if (!isHe && en) opt.textContent = en;
+          });
+        } catch{}
+        // Prefer stored symbol; else derive from currency code
+        const sym = (readStr('currencySymbol','')||'').replace(/["'״]/g,'') || symbolFromCurrency(currency());
+        try { selCur.value = sym; } catch{}
+        selCur.addEventListener('change', (e)=>{
+          const s = (e.target.value||'€');
+          localStorage.setItem('currencySymbol', s);
+          // Also store matching currency code for consistency
+          const code = s==='€'?'EUR':s==='$'?'USD':s==='₪'?'ILS':'EUR';
+          setCurrency(code);
+          location.reload();
+        });
+      }
+    } catch {}
     // Saw thickness modal in Block 1 (desktop + mobile)
     try{
       const btn = document.getElementById('saw-settings-btn');
       const inputMain = document.getElementById('saw-thickness');
       const unitMain = document.getElementById('saw-unit');
+      const pop = document.getElementById('saw-popover');
       if (btn) btn.hidden = false;
       if (btn && inputMain && unitMain){
         btn.addEventListener('click', ()=>{
+          // If enhanced popover is present, let app.js handle it
+          if (pop) return;
           const unitLbl = unitMain.textContent || 'mm';
           const modal = document.createElement('div');
           modal.className = 'global-modal kerf-modal';
@@ -318,12 +379,23 @@
           if (src.length && container){
             container.innerHTML = src.map(a=>`<a href="${a.getAttribute('href')||'#'}" class="nav-link${a.classList.contains('active')?' active':''}">${a.textContent||''}</a>`).join('');
           } else if (container){
-            container.innerHTML = [
-              ['index.html', 'מחשבון חיתוך אופטימלי'],
-              ['plans.html', 'תוכניות בנייה להורדה'],
-              ['about.html', 'אודות'],
-              ['contact.html', 'צור קשר']
-            ].map(([h,t])=>`<a href="${h}" class="nav-link">${t}</a>`).join('');
+            const isHe = (document.documentElement.lang||'he')==='he';
+            const fall = isHe
+              ? [
+                  ['index.html',   'מחשבון חיתוך אופטימלי'],
+                  ['plans.html',   'תוכניות בנייה להורדה'],
+                  ['about.html',   'אודות'],
+                  ['pricing.html', 'מחירון'],
+                  ['contact.html', 'צור קשר']
+                ]
+              : [
+                  ['index.html',   'Cut Optimizer'],
+                  ['plans.html',   'Downloadable Plans'],
+                  ['about.html',   'About'],
+                  ['pricing.html', 'Price List'],
+                  ['contact.html', 'Contact']
+                ];
+            container.innerHTML = fall.map(([h,t])=>`<a href="${h}" class="nav-link">${t}</a>`).join('');
           }
         }catch{}
       };
@@ -354,7 +426,7 @@
         nav.setAttribute('aria-label','mobile');
         drawer.appendChild(nav);
         document.body.appendChild(drawer);
-        ensureNavLinks(nav);
+  ensureNavLinks(nav);
       } else {
         const nav = drawer.querySelector('nav[aria-label="mobile"]');
         if (nav && !nav.children.length) ensureNavLinks(nav);
