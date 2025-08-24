@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>מאמר</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-left">
+      <select id="select-lang" class="btn select">
+        <option value="he">🇮🇱 עברית</option>
+        <option value="en">🇺🇸 English</option>
+      </select>
+    </div>
+    <div class="top-center"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="לוגו" /></div>
+    <div class="top-actions">
+      <select id="select-currency" class="btn select">
+        <option value="€" data-en="Euro">€ יורו</option>
+        <option value="$" data-en="Dollar">$ דולר</option>
+        <option value="₪" data-en="NIS">₪ שקל</option>
+      </select>
+      <select id="select-units" class="btn select" title="Units">
+        <option value="metric" data-en="Metric">מטרי</option>
+        <option value="imperial" data-en="Inches">אימפריאלי</option>
+      </select>
+    </div>
+  </header>
+  <nav class="main-nav" aria-label="primary">
+    <div class="nav-wrap">
+      <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+      <a href="plans.html" class="nav-link">תוכניות בנייה להורדה</a>
+      <a href="articles.html" class="nav-link active">מאמרים</a>
+      <a href="about.html" class="nav-link">אודות</a>
+      <a href="pricing.html" class="nav-link">מחירון</a>
+      <a href="contact.html" class="nav-link">צור קשר</a>
+    </div>
+  </nav>
+  <button id="hamburger" class="hamburger" aria-label="menu" aria-controls="mobile-drawer" aria-expanded="false" hidden>
+    <span class="bars" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+  </button>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="mobile-drawer" class="mobile-drawer" hidden>
+    <nav aria-label="mobile">
+      <a href="index.html" class="nav-link">מחשבון חיתוך אופטימלי</a>
+      <a href="plans.html" class="nav-link">תוכניות בנייה להורדה</a>
+      <a href="articles.html" class="nav-link active">מאמרים</a>
+      <a href="about.html" class="nav-link">אודות</a>
+      <a href="pricing.html" class="nav-link">מחירון</a>
+      <a href="contact.html" class="nav-link">צור קשר</a>
+    </nav>
+  </aside>
+
+  <main class="container">
+    <section class="card article">
+      <div class="card-head"><h2 id="article-title">מאמר</h2></div>
+      <div class="article-hero">
+        <img id="article-img" alt="תמונה" />
+      </div>
+      <article id="article-body" class="article-body"></article>
+      <div class="actions actions-center" style="margin-top:24px">
+        <a class="btn" id="back-to-articles" href="articles.html">⬅ חזרה למאמרים</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© 2025</small>
+  </footer>
+
+  <script src="site.js"></script>
+  <script src="articles-data.js"></script>
+  <script src="article.js"></script>
+  <script>
+    (function(){
+      const isHe = (document.documentElement.lang||'he')==='he';
+      const back = document.getElementById('back-to-articles');
+      if (back) back.textContent = isHe ? '⬅ חזרה למאמרים' : '⬅ Back to Articles';
+    })();
+  </script>
+</body>
+</html>

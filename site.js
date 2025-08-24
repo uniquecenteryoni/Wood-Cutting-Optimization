@@ -237,23 +237,28 @@
     try {
       const isHe = lang()==='he';
       const labels = {
-        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
-        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    about: 'About',  pricing: 'Price List', contact: 'Contact' }
+        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
+        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  pricing: 'Price List', contact: 'Contact' }
       };
       const pageTitles = {
-        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
-        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    about: 'About',  pricing: 'Price List', contact: 'Contact' }
+        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
+        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  pricing: 'Price List', contact: 'Contact' }
       };
       const navOrder = [
         { href: 'index.html',   key: 'index'   },
         { href: 'plans.html',   key: 'plans'   },
+        { href: 'articles.html', key: 'articles' },
         { href: 'about.html',   key: 'about'   },
         { href: 'pricing.html', key: 'pricing' },
         { href: 'contact.html', key: 'contact' }
       ];
       const buildNavHtml = (activePath) => navOrder.map(item => {
         const text = labels[isHe?'he':'en'][item.key];
-        const isActive = activePath.endsWith('/'+item.href) || activePath.endsWith(item.href) || (item.key==='index' && /\/(?:index.html)?$/.test(activePath));
+        const isArticleDetail = /\/(?:article.html)$/.test(activePath);
+        const isActive = activePath.endsWith('/'+item.href)
+          || activePath.endsWith(item.href)
+          || (item.key==='index' && /\/(?:index.html)?$/.test(activePath))
+          || (item.key==='articles' && isArticleDetail);
         return `<a href="${item.href}" class="nav-link${isActive?' active':''}">${text}</a>`;
       }).join('');
 
@@ -267,11 +272,13 @@
 
       // Update document title
       const isIndex = path.endsWith('/index.html') || /\/(?:index.html)?$/.test(path);
-      if (isIndex) document.title = pageTitles[isHe?'he':'en'].index;
-      else if (path.endsWith('plans.html')) document.title = pageTitles[isHe?'he':'en'].plans;
-      else if (path.endsWith('about.html')) document.title = pageTitles[isHe?'he':'en'].about;
-      else if (path.endsWith('pricing.html')) document.title = pageTitles[isHe?'he':'en'].pricing;
-      else if (path.endsWith('contact.html')) document.title = pageTitles[isHe?'he':'en'].contact;
+  if (isIndex) document.title = pageTitles[isHe?'he':'en'].index;
+  else if (path.endsWith('plans.html')) document.title = pageTitles[isHe?'he':'en'].plans;
+  else if (path.endsWith('articles.html')) document.title = pageTitles[isHe?'he':'en'].articles;
+  else if (path.endsWith('article.html')) document.title = pageTitles[isHe?'he':'en'].articles;
+  else if (path.endsWith('about.html')) document.title = pageTitles[isHe?'he':'en'].about;
+  else if (path.endsWith('pricing.html')) document.title = pageTitles[isHe?'he':'en'].pricing;
+  else if (path.endsWith('contact.html')) document.title = pageTitles[isHe?'he':'en'].contact;
     } catch(e){}
     // Header buttons (if present)
     const bLang = el('#btn-lang'); if (bLang) bLang.addEventListener('click', toggleLang);
@@ -384,6 +391,7 @@
               ? [
                   ['index.html',   'מחשבון חיתוך אופטימלי'],
                   ['plans.html',   'תוכניות בנייה להורדה'],
+                  ['articles.html','מאמרים'],
                   ['about.html',   'אודות'],
                   ['pricing.html', 'מחירון'],
                   ['contact.html', 'צור קשר']
@@ -391,6 +399,7 @@
               : [
                   ['index.html',   'Cut Optimizer'],
                   ['plans.html',   'Downloadable Plans'],
+                  ['articles.html','Articles'],
                   ['about.html',   'About'],
                   ['pricing.html', 'Price List'],
                   ['contact.html', 'Contact']

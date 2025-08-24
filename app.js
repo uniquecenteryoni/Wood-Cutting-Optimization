@@ -17,7 +17,7 @@ let inventoryPriceCurrencyUnit = loadData('inventoryPriceCurrencyUnit') || '';
 // העדפות תצוגה (שמורות בדפדפן)
 let displaySettings = loadData('displaySettings') || { colorPieces: true, fontWeight: 'regular', showPieceLabels: true, showTags: true, panelOpen: false, displayUnit: undefined };
 // Saw-popover advanced settings
-let sawAdv = loadData('sawAdv') || { edgeTrimOn:false, trimTop:0, trimBottom:0, trimLeft:0, trimRight:0, tagOn:false };
+let sawAdv = loadData('sawAdv') || { tagOn:false };
 // ודא מפתחות ברירת מחדל
 displaySettings = {
     colorPieces: displaySettings.colorPieces !== false,
@@ -32,14 +32,7 @@ displaySettings = {
     })()
 };
 // normalize sawAdv
-sawAdv = {
-    edgeTrimOn: !!(sawAdv && sawAdv.edgeTrimOn),
-    trimTop: Math.max(0, Number(sawAdv?.trimTop||0) || 0),
-    trimBottom: Math.max(0, Number(sawAdv?.trimBottom||0) || 0),
-    trimLeft: Math.max(0, Number(sawAdv?.trimLeft||0) || 0),
-    trimRight: Math.max(0, Number(sawAdv?.trimRight||0) || 0),
-    tagOn: !!(sawAdv && sawAdv.tagOn)
-};
+sawAdv = { tagOn: !!(sawAdv && sawAdv.tagOn) };
 // מזהה ייחודי לדיאגרמות SVG כדי למנוע התנגשויות id בין דיאגרמות שונות
 let svgIdCounter = 0;
 // Global helper: quick text width approximation used by SVG label fit checks
@@ -616,7 +609,7 @@ function renderInventoryTable() {
     const newRow = showNewInventoryRow
         ? `<tr class="new-row">${Array.from({ length: cols - 1 }).map((_, i) => {
             if (i === clsIdx) {
-                const opts = language === 'he' ? ['קורה','פלטה'] : ['Beam','Plate'];
+                const opts = language === 'he' ? ['קורה'] : ['Beam'];
                 return `<td data-col="${i}"><select class="inv-classification">${opts.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></td>`;
             }
             if (i === matIdx) {
@@ -661,10 +654,8 @@ function renderInventoryTable() {
                 }
             }
             if (editingRows.has(rowIndex) && i === clsIdx) {
-                const isPlate = classificationIsPlate(raw);
                 const beamLabel = language==='he' ? 'קורה' : 'Beam';
-                const plateLabel = language==='he' ? 'פלטה' : 'Plate';
-                const select = `<select class="inv-classification"><option value="${beamLabel}" ${isPlate?'':'selected'}>${beamLabel}</option><option value="${plateLabel}" ${isPlate?'selected':''}>${plateLabel}</option></select>`;
+                const select = `<select class="inv-classification"><option value="${beamLabel}" selected>${beamLabel}</option></select>`;
                 return `<td data-col="${i}">${select}</td>`;
             }
             if (editingRows.has(rowIndex) && i === matIdx) {
@@ -943,394 +934,584 @@ function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
     return best;
 }
 
-// אריזת פלטות 2D (Guillotine heuristic + אפשרות יחידה לריבוע פחת גדול אם הכל נכנס)
-function packPlatesForGroup(groupKey, piecesMM, kerfMM) {
-    // groupKey: { type, thickness }
+// ===== 2D Plate packing (multi-strategy) =====
+// Rectangle helpers
+function rectArea(r){ return Math.max(0, r.w) * Math.max(0, r.h); }
+function pruneFreeRects(free){
+    const out = [];
+    for (let i=0;i<free.length;i++){
+        const a = free[i]; if (!a || a.w<=0 || a.h<=0) continue;
+        let contained = false;
+        for (let j=0;j<free.length;j++){
+            if (i===j) continue; const b = free[j];
+            if (!b) continue;
+            if (a.x>=b.x-1e-6 && a.y>=b.y-1e-6 && a.x+a.w<=b.x+b.w+1e-6 && a.y+a.h<=b.y+b.h+1e-6) { contained = true; break; }
+        }
+        if (!contained) out.push(a);
+    }
+    return out;
+}
+function sortByBL(a,b){ // bottom-left: y asc then x asc
+    if (a.y !== b.y) return a.y - b.y; return a.x - b.x;
+}
+function splitFreeRect(fr, pw, ph, kerf){
+    const k = Math.max(0, kerf||0);
+    const right = { x: fr.x + pw + k, y: fr.y, w: fr.w - pw - k, h: ph };
+    const bottom = { x: fr.x, y: fr.y + ph + k, w: fr.w, h: fr.h - ph - k };
+    const out = [];
+    if (right.w > 0.5 && right.h > 0.5) out.push(right);
+    if (bottom.w > 0.5 && bottom.h > 0.5) out.push(bottom);
+    return out;
+}
+function rankLayout(layout){
+    const wastes = (layout.freeRects||[]).slice().sort((a,b)=>rectArea(b)-rectArea(a));
+    const a1 = wastes[0] ? rectArea(wastes[0]) : 0;
+    const a2 = wastes[1] ? rectArea(wastes[1]) : 0;
+    const count = wastes.length;
+    return { a1, a2, count };
+}
+function betterLayout(l1, l2){
+    const r1 = rankLayout(l1), r2 = rankLayout(l2);
+    if (r1.a1 !== r2.a1) return r1.a1 > r2.a1;
+    if (r1.a2 !== r2.a2) return r1.a2 > r2.a2;
+    return r1.count < r2.count;
+}
+// Waste grid metrics per spec: use all piece edges + plate edges, find largest and second-largest empty rectangles
+function computeEmptyGridMetrics(placed, W, H){
+    const xsSet = new Set([0, W]);
+    const ysSet = new Set([0, H]);
+    for (const p of (placed||[])){
+        if (!p) continue;
+        xsSet.add(Math.max(0, Math.min(W, p.x)));
+        xsSet.add(Math.max(0, Math.min(W, p.x + p.w)));
+        ysSet.add(Math.max(0, Math.min(H, p.y)));
+        ysSet.add(Math.max(0, Math.min(H, p.y + p.h)));
+    }
+    const xs = Array.from(xsSet).sort((a,b)=>a-b);
+    const ys = Array.from(ysSet).sort((a,b)=>a-b);
+    const nx = Math.max(0, xs.length-1), ny = Math.max(0, ys.length-1);
+    if (nx<=0 || ny<=0) return { a1: 0, a2: 0, count: 0 };
+    // Build occupied matrix by cells: cell is occupied if intersects any placed rect
+    const occ = Array.from({length: ny}, ()=> Array(nx).fill(0));
+    for (let r=0;r<ny;r++){
+        const y0 = ys[r], y1 = ys[r+1];
+        for (let c=0;c<nx;c++){
+            const x0 = xs[c], x1 = xs[c+1];
+            const cw = x1-x0, ch = y1-y0;
+            if (cw<=1e-6 || ch<=1e-6) { occ[r][c] = 1; continue; }
+            let isOcc = false;
+            for (const p of (placed||[])){
+                if (!p) continue;
+                const px0=p.x, py0=p.y, px1=p.x+p.w, py1=p.y+p.h;
+                const ix = Math.max(0, Math.min(x1, px1) - Math.max(x0, px0));
+                const iy = Math.max(0, Math.min(y1, py1) - Math.max(y0, py0));
+                if (ix>1e-6 && iy>1e-6){ isOcc = true; break; }
+            }
+            occ[r][c] = isOcc ? 1 : 0;
+        }
+    }
+    // Prefix sums per column to quickly check emptiness over a row range
+    const ps = Array.from({length: ny+1}, ()=> Array(nx).fill(0));
+    for (let r=0;r<ny;r++){
+        for (let c=0;c<nx;c++) ps[r+1][c] = ps[r][c] + (occ[r][c] ? 1 : 0);
+    }
+    let best1 = 0, best2 = 0; // areas
+    let bestRect1 = null, bestRect2 = null;
+    let emptyCells = 0;
+    for (let r=0;r<ny;r++){
+        for (let c=0;c<nx;c++) if (!occ[r][c]) emptyCells++;
+    }
+    // Consider all row ranges
+    for (let r1=0;r1<ny;r1++){
+        for (let r2=r1;r2<ny;r2++){
+            const h = ys[r2+1] - ys[r1];
+            if (h<=0) continue;
+            // Compute which columns are entirely empty in this row range
+            const empt = new Array(nx);
+            for (let c=0;c<nx;c++) empt[c] = (ps[r2+1][c] - ps[r1][c]) === 0;
+            // Scan contiguous empty segments, compute width and area
+            let c=0;
+            while (c<nx){
+                while (c<nx && !empt[c]) c++;
+                if (c>=nx) break;
+                let cStart = c, width = 0;
+                while (c<nx && empt[c]){ width += (xs[c+1] - xs[c]); c++; }
+                const area = width * h;
+                if (area > best1){
+                    best2 = best1; bestRect2 = bestRect1;
+                    best1 = area; bestRect1 = { x: xs[cStart], y: ys[r1], w: width, h };
+                } else if (area > best2){
+                    best2 = area; bestRect2 = { x: xs[cStart], y: ys[r1], w: width, h };
+                }
+            }
+        }
+    }
+    return { a1: best1, a2: best2, count: emptyCells, rect1: bestRect1, rect2: bestRect2 };
+}
+function betterLayoutByWaste(l1, l2, plate){
+    const W = plate.Wmm, H = plate.Hmm;
+    const r1 = computeEmptyGridMetrics(l1.placed||[], W, H);
+    const r2 = computeEmptyGridMetrics(l2.placed||[], W, H);
+    if (r1.a1 !== r2.a1) return r1.a1 > r2.a1;
+    if (r1.a2 !== r2.a2) return r1.a2 > r2.a2;
+    return r1.count < r2.count;
+}
+
+// Robust maximal empty rectangle (axis-aligned) using weighted histogram per row
+function computeMaxEmptyRectHistogram(placed, W, H){
+    const xsSet = new Set([0, W]);
+    const ysSet = new Set([0, H]);
+    for (const p of (placed||[])){
+        if (!p) continue;
+        xsSet.add(Math.max(0, Math.min(W, p.x)));
+        xsSet.add(Math.max(0, Math.min(W, p.x + p.w)));
+        ysSet.add(Math.max(0, Math.min(H, p.y)));
+        ysSet.add(Math.max(0, Math.min(H, p.y + p.h)));
+    }
+    const xs = Array.from(xsSet).sort((a,b)=>a-b);
+    const ys = Array.from(ysSet).sort((a,b)=>a-b);
+    const nx = Math.max(0, xs.length-1), ny = Math.max(0, ys.length-1);
+    if (nx<=0 || ny<=0) return { area: 0, rect: null };
+    // Occupancy grid
+    const occ = Array.from({length: ny}, ()=> Array(nx).fill(0));
+    for (let r=0;r<ny;r++){
+        const y0 = ys[r], y1 = ys[r+1];
+        for (let c=0;c<nx;c++){
+            const x0 = xs[c], x1 = xs[c+1];
+            const cw = x1-x0, ch = y1-y0;
+            if (cw<=1e-6 || ch<=1e-6) { occ[r][c] = 1; continue; }
+            let isOcc = false;
+            for (const p of (placed||[])){
+                if (!p) continue;
+                const px0=p.x, py0=p.y, px1=p.x+p.w, py1=p.y+p.h;
+                const ix = Math.max(0, Math.min(x1, px1) - Math.max(x0, px0));
+                const iy = Math.max(0, Math.min(y1, py1) - Math.max(y0, py0));
+                if (ix>1e-6 && iy>1e-6){ isOcc = true; break; }
+            }
+            occ[r][c] = isOcc ? 1 : 0;
+        }
+    }
+    // Weighted histogram stack per row
+    const widths = Array.from({length: nx}, (_,c)=> xs[c+1]-xs[c]);
+    const heights = Array(nx).fill(0);
+    let bestArea = 0, bestRect = null;
+    for (let r=0;r<ny;r++){
+        const dy = ys[r+1]-ys[r];
+        for (let c=0;c<nx;c++) heights[c] = occ[r][c] ? 0 : (heights[c] + dy);
+        // stack of {idx, height, accWidth}
+        const stack = [];
+        let accWidth = 0;
+        for (let c=0;c<=nx;c++){
+            const h = (c<nx) ? heights[c] : 0;
+            const w = (c<nx) ? widths[c] : 0;
+            let startX = xs[c];
+            let sumW = 0;
+            let lastIdx = c;
+            while (stack.length && stack[stack.length-1].height > h){
+                const top = stack.pop();
+                sumW += top.accWidth;
+                const area = top.height * sumW;
+                if (area > bestArea){
+                    bestArea = area;
+                    const xEnd = xs[c];
+                    const xStart = xEnd - sumW;
+                    const yEnd = ys[r+1];
+                    const yStart = yEnd - top.height;
+                    bestRect = { x: xStart, y: yStart, w: sumW, h: top.height };
+                }
+                startX = xs[top.idx];
+                lastIdx = top.idx;
+            }
+            const acc = (sumW || 0) + (c<nx ? w : 0);
+            if (h>0){
+                stack.push({ idx: lastIdx, height: h, accWidth: acc });
+            }
+        }
+    }
+    return { area: bestArea, rect: bestRect };
+}
+
+// Build grid (xs, ys, occ) once for placed set
+function buildEmptyGrid(placed, W, H, kerf){
+    const xsSet = new Set([0, W]);
+    const ysSet = new Set([0, H]);
+    for (const p of (placed||[])){
+        if (!p) continue;
+    const K = Math.max(0, kerf||0);
+    // add original edges
+    xsSet.add(Math.max(0, Math.min(W, p.x)));
+    xsSet.add(Math.max(0, Math.min(W, p.x + p.w)));
+    ysSet.add(Math.max(0, Math.min(H, p.y)));
+    ysSet.add(Math.max(0, Math.min(H, p.y + p.h)));
+    // add kerf offset edges to align cells with margins
+    xsSet.add(Math.max(0, Math.min(W, p.x - (p.x>0 ? K : 0))));
+    xsSet.add(Math.max(0, Math.min(W, p.x + p.w + (p.x+p.w < W ? K : 0))));
+    ysSet.add(Math.max(0, Math.min(H, p.y - (p.y>0 ? K : 0))));
+    ysSet.add(Math.max(0, Math.min(H, p.y + p.h + (p.y+p.h < H ? K : 0))));
+    }
+    const xs = Array.from(xsSet).sort((a,b)=>a-b);
+    const ys = Array.from(ysSet).sort((a,b)=>a-b);
+    const nx = Math.max(0, xs.length-1), ny = Math.max(0, ys.length-1);
+    const occ = Array.from({length: ny}, ()=> Array(nx).fill(0));
+    for (let r=0;r<ny;r++){
+        const y0 = ys[r], y1 = ys[r+1];
+        for (let c=0;c<nx;c++){
+            const x0 = xs[c], x1 = xs[c+1];
+            const cw = x1-x0, ch = y1-y0;
+            if (cw<=1e-6 || ch<=1e-6) { occ[r][c] = 1; continue; }
+            let isOcc = false;
+            for (const p of (placed||[])){
+                if (!p) continue;
+                const K = Math.max(0, kerf||0);
+                const px0 = (p.x>0) ? (p.x - K) : p.x;
+                const py0 = (p.y>0) ? (p.y - K) : p.y;
+                const px1 = (p.x+p.w < W) ? (p.x+p.w + K) : (p.x+p.w);
+                const py1 = (p.y+p.h < H) ? (p.y+p.h + K) : (p.y+p.h);
+                const ix = Math.max(0, Math.min(x1, px1) - Math.max(x0, px0));
+                const iy = Math.max(0, Math.min(y1, py1) - Math.max(y0, py0));
+                if (ix>1e-6 && iy>1e-6){ isOcc = true; break; }
+            }
+            occ[r][c] = isOcc ? 1 : 0;
+        }
+    }
+    return { xs, ys, occ };
+}
+
+function carveRectFromGrid(occ, xs, ys, rect, kerf, W, H){
+    const nx = Math.max(0, xs.length-1), ny = Math.max(0, ys.length-1);
+    const K = Math.max(0, kerf||0);
+    // carve the rectangle plus kerf gutter around it (not beyond plate edges)
+    const x0 = Math.max(0, rect.x - (rect.x>0 ? K : 0));
+    const x1 = Math.min(W, rect.x + rect.w + (rect.x+rect.w < W ? K : 0));
+    const y0 = Math.max(0, rect.y - (rect.y>0 ? K : 0));
+    const y1 = Math.min(H, rect.y + rect.h + (rect.y+rect.h < H ? K : 0));
+    for (let r=0;r<ny;r++){
+        const cy0 = ys[r], cy1 = ys[r+1];
+        if (cy1<=y0 || cy0>=y1) continue;
+        for (let c=0;c<nx;c++){
+            const cx0 = xs[c], cx1 = xs[c+1];
+            if (cx1<=x0 || cx0>=x1) continue;
+            occ[r][c] = 1; // mark as occupied by chosen empty rect to avoid reusing
+        }
+    }
+}
+
+function computeAllEmptyRects(placed, W, H, kerf, maxRects){
+    const grid = buildEmptyGrid(placed, W, H, kerf);
+    const out = [];
+    const limit = isFinite(maxRects) && maxRects>0 ? Math.floor(maxRects) : 999;
+    for (let i=0;i<limit;i++){
+        // reuse histogram over current grid state
+        // Reconstruct placed-from-grid occupancy for histogram run
+        const xs = grid.xs, ys = grid.ys, occ = grid.occ;
+        const nx = Math.max(0, xs.length-1), ny = Math.max(0, ys.length-1);
+        if (nx<=0 || ny<=0) break;
+        // Build heights from occ
+        const widths = Array.from({length: nx}, (_,c)=> xs[c+1]-xs[c]);
+        const heights = Array(nx).fill(0);
+        let bestArea = 0, bestRect = null;
+        for (let r=0;r<ny;r++){
+            const dy = ys[r+1]-ys[r];
+            for (let c=0;c<nx;c++) heights[c] = occ[r][c] ? 0 : (heights[c] + dy);
+            const stack = [];
+            for (let c=0;c<=nx;c++){
+                const h = (c<nx) ? heights[c] : 0;
+                const w = (c<nx) ? widths[c] : 0;
+                let sumW = 0; let lastIdx = c;
+                while (stack.length && stack[stack.length-1].height > h){
+                    const top = stack.pop();
+                    sumW += top.accWidth;
+                    const area = top.height * sumW;
+                    if (area > bestArea){
+                        bestArea = area;
+                        const xEnd = xs[c];
+                        const xStart = xEnd - sumW;
+                        const yEnd = ys[r+1];
+                        const yStart = yEnd - top.height;
+                        bestRect = { x: xStart, y: yStart, w: sumW, h: top.height };
+                    }
+                    lastIdx = top.idx;
+                }
+                const acc = (sumW || 0) + (c<nx ? w : 0);
+                if (h>0){ stack.push({ idx: lastIdx, height: h, accWidth: acc }); }
+            }
+        }
+    if (!bestRect || bestArea <= 1e-6) break;
+        out.push(bestRect);
+    carveRectFromGrid(grid.occ, grid.xs, grid.ys, bestRect, kerf, W, H);
+        // loop to find next best
+    }
+    return out;
+}
+
+// Strict kerf margin rule: for each non-edge side, any gap to plate edge must be 0 or >= kerf
+// and any gap to neighbor pieces (with orthogonal overlap) must be >= kerf (no touching).
+function validKerfMargins(x, y, w, h, placed, W, H, kerf){
+    const K = Math.max(0, kerf||0);
+    if (K <= 0) return true;
+    const eps = 1e-6;
+    // Plate edges gaps
+    const leftGap = x;
+    if (leftGap > eps && leftGap + eps < K) return false;
+    const rightGap = W - (x + w);
+    if (rightGap > eps && rightGap + eps < K) return false;
+    const bottomGap = y;
+    if (bottomGap > eps && bottomGap + eps < K) return false;
+    const topGap = H - (y + h);
+    if (topGap > eps && topGap + eps < K) return false;
+    // Neighbor pieces gaps
+    const overlaps1D = (a0,a1,b0,b1)=> (Math.min(a1,b1) - Math.max(a0,b0)) > eps;
+    for (const p of (placed||[])){
+        if (!p) continue;
+        // horizontal neighbors (left/right)
+        const vOv = overlaps1D(y, y+h, p.y, p.y+p.h);
+        if (vOv){
+            // left neighbor
+            if (p.x + p.w <= x + eps){
+                const d = x - (p.x + p.w);
+                if (d < K - eps) return false;
+            }
+            // right neighbor
+            if (p.x >= x + w - eps){
+                const d = p.x - (x + w);
+                if (d < K - eps) return false;
+            }
+        }
+        // vertical neighbors (bottom/top)
+        const hOv = overlaps1D(x, x+w, p.x, p.x+p.w);
+        if (hOv){
+            // bottom neighbor
+            if (p.y + p.h <= y + eps){
+                const d = y - (p.y + p.h);
+                if (d < K - eps) return false;
+            }
+            // top neighbor
+            if (p.y >= y + h - eps){
+                const d = p.y - (y + h);
+                if (d < K - eps) return false;
+            }
+        }
+    }
+    return true;
+}
+// Free-rectangles packer: mode 'first-fit' or 'best-fit'
+function packFreeRects(plate, parts, kerf, mode){
+    const W = plate.Wmm, H = plate.Hmm;
+    let free = [{x:0,y:0,w:W,h:H}];
+    const placed = [];
+    const order = parts.slice().sort((p,q)=> (q.w*q.h) - (p.w*p.h));
+    for (const part of order){
+        const scanned = free.map((fr,idx)=>({fr,idx})).sort((a,b)=>sortByBL(a.fr,b.fr));
+        const can = (fr,pw,ph)=> (pw<=fr.w+1e-6 && ph<=fr.h+1e-6);
+        // helper: simulate placing at (fr.x,fr.y) to score waste metric
+        const scorePlace = (frIdx, rotFlag)=>{
+            const fr = free[frIdx];
+            const pw = rotFlag ? part.h : part.w;
+            const ph = rotFlag ? part.w : part.h;
+            if (!can(fr, pw, ph)) return null;
+            // strict kerf rule: verify gaps to plate edges and to neighbors
+            if (!validKerfMargins(fr.x, fr.y, pw, ph, placed, W, H, kerf)) return null;
+            const newPlaced = placed.concat([{ x: fr.x, y: fr.y, w: pw, h: ph, src: part }]);
+            // simulate free rects after split
+            let newFree = free.slice();
+            const frOld = newFree[frIdx];
+            const split = splitFreeRect(frOld, pw, ph, kerf);
+            newFree.splice(frIdx,1);
+            newFree.push(...split);
+            newFree = pruneFreeRects(newFree);
+            const m = computeEmptyGridMetrics(newPlaced, W, H);
+            return { frIdx, rot: rotFlag, pw, ph, metric: m };
+        };
+        // First-Fit: pick first by BL scanning; if both orientations fit at that cell, choose orientation by best metric
+        if (mode==='first-fit'){
+            let chosen = null;
+            for (const {fr,idx} of scanned){
+                if (can(fr, part.w, part.h) || can(fr, part.h, part.w)){
+                    const candA = scorePlace(idx, false);
+                    const candB = scorePlace(idx, true);
+                    if (candA && candB){
+                        const a=candA.metric, b=candB.metric;
+                        const better = (a.a1!==b.a1) ? (a.a1>b.a1) : (a.a2!==b.a2) ? (a.a2>b.a2) : (a.count<b.count);
+                        chosen = better ? candA : candB;
+                    } else {
+                        chosen = candA || candB;
+                    }
+                    break; // first fit cell decided
+                }
+            }
+            if (!chosen) continue;
+            const fr = free[chosen.frIdx];
+            if (!validKerfMargins(fr.x, fr.y, chosen.pw, chosen.ph, placed, W, H, kerf)) continue;
+            placed.push({ x: fr.x, y: fr.y, w: chosen.pw, h: chosen.ph, src: part });
+            const newRects = splitFreeRect(fr, chosen.pw, chosen.ph, kerf);
+            free.splice(chosen.frIdx,1);
+            free.push(...newRects);
+            free = pruneFreeRects(free);
+            continue;
+        }
+        // Best-Fit: pick by minimal leftover area; if tie or when comparing orientations, break ties by waste metric
+        let best = null; // {frIdx, rot, pw, ph, leftover, metric}
+        for (const {fr,idx} of scanned){
+            if (can(fr, part.w, part.h)){
+                const cand = scorePlace(idx, false);
+                if (cand){
+                    const leftover = (fr.w*fr.h) - (part.w*part.h);
+                    cand.leftover = leftover;
+                    if (!best || leftover < best.leftover || (Math.abs(leftover-best.leftover) < 1e-6 && (
+                        cand.metric.a1>best.metric.a1 || (cand.metric.a1===best.metric.a1 && (cand.metric.a2>best.metric.a2 || (cand.metric.a2===best.metric.a2 && cand.metric.count<best.metric.count)))
+                    ))) best = cand;
+                }
+            }
+            if (can(fr, part.h, part.w)){
+                const cand = scorePlace(idx, true);
+                if (cand){
+                    const leftover = (fr.w*fr.h) - (part.w*part.h);
+                    cand.leftover = leftover;
+                    if (!best || leftover < best.leftover || (Math.abs(leftover-best.leftover) < 1e-6 && (
+                        cand.metric.a1>best.metric.a1 || (cand.metric.a1===best.metric.a1 && (cand.metric.a2>best.metric.a2 || (cand.metric.a2===best.metric.a2 && cand.metric.count<best.metric.count)))
+                    ))) best = cand;
+                }
+            }
+        }
+        if (!best) continue;
+    const fr = free[best.frIdx];
+    if (!validKerfMargins(fr.x, fr.y, best.pw, best.ph, placed, W, H, kerf)) continue;
+        placed.push({ x: fr.x, y: fr.y, w: best.pw, h: best.ph, src: part });
+        const newRects = splitFreeRect(fr, best.pw, best.ph, kerf);
+        free.splice(best.frIdx,1);
+        free.push(...newRects);
+        free = pruneFreeRects(free);
+    }
+    // remaining = parts not placed by id
+    const placedIds = new Set(placed.map(p=>p.src.__id));
+    const remaining = parts.filter(p=>!placedIds.has(p.__id));
+    return { placed, freeRects: free, remaining };
+}
+// Shelving packer
+function packShelves(plate, parts, kerf){
+    const W = plate.Wmm, H = plate.Hmm;
+    const order = parts.slice().sort((a,b)=> (Math.max(b.w,b.h) - Math.max(a.w,a.h)) );
+    const placed = [];
+    let x=0, y=0, shelfH=0;
+    for (const part of order){
+        // choose orientation by maximizing waste metric after placement at candidate spot
+        const tryPlace = (px,py,pw,ph)=>{
+            if (px+pw>W+1e-6 || py+ph>H+1e-6) return null;
+            if (!validKerfMargins(px, py, pw, ph, placed, W, H, kerf)) return null;
+            const newPlaced = placed.concat([{x:px,y:py,w:pw,h:ph,src:part}]);
+            const m = computeEmptyGridMetrics(newPlaced, W, H);
+            return {x:px,y:py,w:pw,h:ph,metric:m};
+        };
+        const candA = tryPlace(x,y, part.w, part.h);
+        const candB = tryPlace(x,y, part.h, part.w);
+        let chosen = null;
+        const better = (a,b)=> a && (!b || a.metric.a1>b.metric.a1 || (a.metric.a1===b.metric.a1 && (a.metric.a2>b.metric.a2 || (a.metric.a2===b.metric.a2 && a.metric.count<b.metric.count))));
+        if (better(candA,candB)) chosen = candA;
+        else if (better(candB,candA)) chosen = candB;
+        if (chosen){
+            placed.push({x:chosen.x,y:chosen.y,w:chosen.w,h:chosen.h,src:part});
+            x += chosen.w + kerf;
+            shelfH = Math.max(shelfH, chosen.h);
+        } else {
+            // new shelf
+            x = 0; y += shelfH + kerf; shelfH = 0;
+            const candA2 = tryPlace(x,y, part.w, part.h);
+            const candB2 = tryPlace(x,y, part.h, part.w);
+            if (better(candA2,candB2)) chosen = candA2;
+            else if (better(candB2,candA2)) chosen = candB2;
+            if (chosen){
+                placed.push({x:chosen.x,y:chosen.y,w:chosen.w,h:chosen.h,src:part});
+                x += chosen.w + kerf;
+                shelfH = Math.max(shelfH, chosen.h);
+            }
+        }
+    }
+    const freeRects = [];
+    if (shelfH>0 && x < W){ freeRects.push({ x, y, w: Math.max(0, W-x), h: shelfH }); }
+    if (y + shelfH + kerf < H){ freeRects.push({ x:0, y:y+shelfH+kerf, w: W, h: Math.max(0, H-(y+shelfH+kerf)) }); }
+    const placedIds = new Set(placed.map(p=>p.src.__id));
+    const remaining = parts.filter(p=>!placedIds.has(p.__id));
+    return { placed, freeRects, remaining };
+}
+
+function packPlatesForGroup(groupKey, rects, kerfMM){
+    // Build candidate plates from inventory (matching type+thickness and classified as plate)
     const tIdx = getTypeColIndex();
     const thIdx = getThicknessColIndex();
     const wIdx = getWidthColIndex();
-    const lenIdx = getLengthColIndex();
+    const lIdx = getLengthColIndex();
     const priceIdx = getPriceColIndex();
     const supplierIdx = getSupplierColIndex();
     const materialIdx = getMaterialColIndex();
-    const wUnit = inventoryUnits[wIdx] || '';
-    const lUnit = inventoryUnits[lenIdx] || '';
-    const plates = inventoryData
-        .map((row, i) => ({ row, i }))
-        .filter(({row}) => String(row[tIdx]) === groupKey.type && String(row[thIdx]) === groupKey.thickness)
-        .map(({row,i}) => {
-            const Wmm = toMM(row[wIdx], wUnit);
-            const Hmm = toMM(row[lenIdx], lUnit);
-            let price = parseFloat(String(row[priceIdx] ?? '').replace(/[^0-9.\-]/g,''));
-            if (!isFinite(price)) price = 0; // treat empty/invalid as 0
-            return { index:i, row, Wmm, Hmm, price, supplier: row[supplierIdx], material: row[materialIdx] };
-        })
-        .filter(p => isFinite(p.Wmm) && isFinite(p.Hmm) && p.Wmm>0 && p.Hmm>0);
-    if (plates.length === 0) return null;
-    // נבחר פלטה לפי מחיר לשטח מינימלי
-    plates.sort((a,b)=> (a.price/(a.Wmm*a.Hmm)) - (b.price/(b.Wmm*b.Hmm)));
-        const chosen = plates[0];
-    // Normalize orientation for packing: use the longer side as width to improve row layouts
-    // Apply edge trims for packing only (cm inputs by default)
-    const trimsMM = (function(){
-        if (!sawAdv.edgeTrimOn) return {t:0,b:0,l:0,r:0};
-        const unit = (unitSystem==='imperial') ? 'in' : 'cm';
-        const toMMv = v => Math.max(0, toMM(Number(v||0), unit));
-        return {
-            t: toMMv(sawAdv.trimTop),
-            b: toMMv(sawAdv.trimBottom),
-            l: toMMv(sawAdv.trimLeft),
-            r: toMMv(sawAdv.trimRight)
-        };
-    })();
-    // Normalize orientation, then shrink by trims
-    const baseW = Math.max(chosen.Wmm, chosen.Hmm);
-    const baseH = Math.min(chosen.Wmm, chosen.Hmm);
-    const packW = Math.max(0, baseW - (trimsMM.l + trimsMM.r));
-    const packH = Math.max(0, baseH - (trimsMM.t + trimsMM.b));
-    // נסה קודם רשת לחלקים זהים (Grid) — מיטב למזעור מס' פלטות עבור חלקים זהים
-    function tryIdenticalGridLayout() {
-        if (!piecesMM || piecesMM.length === 0) return null;
-        // בדוק זהות (עד כדי סיבוב)
-        const canon = p => {
-            const a = Math.min(p.w, p.h), b = Math.max(p.w, p.h);
-            return `${Math.round(a)}x${Math.round(b)}`;
-        };
-        const key0 = canon(piecesMM[0]);
-        for (let i=1;i<piecesMM.length;i++) {
-            if (canon(piecesMM[i]) !== key0) return null;
+    const wU = inventoryUnits[wIdx] || '';
+    const lU = inventoryUnits[lIdx] || '';
+    const cands = (inventoryData||[])
+        .map((row,i)=>({row,i}))
+        .filter(({row})=> String(row[tIdx])===groupKey.type && String(row[thIdx])===groupKey.thickness && classificationIsPlate(getClassificationFor(String(row[tIdx]), String(row[thIdx]))))
+        .map(({row})=>({
+            Wmm: toMM(row[wIdx], wU),
+            Hmm: toMM(row[lIdx], lU),
+            price: isFinite(Number(row[priceIdx])) ? Number(row[priceIdx]) : 0,
+            supplier: row[supplierIdx] || '',
+            material: row[materialIdx] || ''
+        }))
+        .filter(p=> isFinite(p.Wmm)&&isFinite(p.Hmm) && p.Wmm>0 && p.Hmm>0)
+        .sort((a,b)=> (a.price - b.price) || ((a.Wmm*a.Hmm) - (b.Wmm*b.Hmm)));
+    if (!cands.length) return null;
+    // Tag parts
+    let __id=1; const parts = rects.map(r=>({w:r.w, h:r.h, tag:r.tag||'', __id:__id++}));
+    const bestOnPlate = (plate, parts) => {
+        const A = packFreeRects(plate, parts, kerfMM, 'first-fit');
+        const B = packFreeRects(plate, parts, kerfMM, 'best-fit');
+        const C = packShelves(plate, parts, kerfMM);
+        const all = [A,B,C];
+        const allFit = all.filter(r=> (r.remaining||[]).length===0);
+        if (allFit.length){
+            let best = allFit[0];
+            for (const r of allFit){ if (betterLayoutByWaste(r,best, plate)) best = r; }
+            return best;
         }
-        // נסה שתי אוריינטציות וחשב קיבולת לפלטה
-    const PW = packW, PH = packH;
-        const base = piecesMM[0];
-        const orients = [ {pw: base.w, ph: base.h}, {pw: base.h, ph: base.w} ];
-
-        function buildRowMajor(pw, ph, alignRight, count) {
-            const cols = Math.max(0, Math.floor((PW + kerfMM) / (pw + kerfMM)));
-            const rows = Math.max(0, Math.floor((PH + kerfMM) / (ph + kerfMM)));
-            const cap = cols * rows;
-            if (cap <= 0) return null;
-            const placed = [];
-            const toPlace = Math.min(count, cap);
-            let placedCount = 0;
-            for (let r=0; r<rows && placedCount<toPlace; r++) {
-                const piecesThisRow = Math.min(cols, toPlace - placedCount);
-                for (let c=0; c<piecesThisRow; c++) {
-                    const usedWidthRow = piecesThisRow * pw + Math.max(0, piecesThisRow - 1) * kerfMM;
-                    const baseX = alignRight ? (PW - usedWidthRow) : 0;
-                    const x = baseX + c * (pw + kerfMM);
-                    const y = r * (ph + kerfMM);
-                    placed.push({ x, y, w: pw, h: ph, src: { w: pw, h: ph } });
-                    placedCount++;
-                }
-            }
-            // חישוב freeRects
-            const freeRects = [];
-            const fullRows = Math.floor(toPlace / cols);
-            const remInRow = toPlace % cols;
-            const usedEdgeXFull = cols * pw + Math.max(0, cols - 1) * kerfMM;
-            const usedHeightWithPartial = fullRows * (ph + kerfMM) + (remInRow > 0 ? ph : 0);
-            // ימינה בשורות מלאות
-            for (let r=0;r<fullRows;r++) {
-                const x = usedEdgeXFull;
-                const y = r * (ph + kerfMM);
-                const w = PW - x;
-                const h = ph;
-                if (w > 0 && h > 0) freeRects.push({ x, y, w, h });
-            }
-            // שורה חלקית
-            if (remInRow > 0) {
-                const usedWidthRow = remInRow * pw + Math.max(0, remInRow - 1) * kerfMM;
-                const y = fullRows * (ph + kerfMM);
-                if (alignRight) {
-                    const x = 0;
-                    const w = PW - usedWidthRow;
-                    if (w > 0 && ph > 0) freeRects.push({ x, y, w, h: ph });
-                } else {
-                    const x = usedWidthRow;
-                    const w = PW - x;
-                    if (w > 0 && ph > 0) freeRects.push({ x, y, w, h: ph });
-                }
-            }
-            // תחתון
-            {
-                const x = 0;
-                // אם אין שורה חלקית והיו שורות מלאות, גובה מנוצל = fullRows*ph + (fullRows-1)*kerf
-                const usedHeight = (remInRow>0)
-                    ? usedHeightWithPartial
-                    : (fullRows>0 ? (fullRows * ph + Math.max(0, fullRows - 1) * kerfMM) : 0);
-                const y = usedHeight;
-                const w = PW;
-                const h = PH - y;
-                if (w > 0 && h > 0) freeRects.push({ x, y, w, h });
-            }
-            return { placed, freeRects, cap };
+        let best = all[0];
+        for (const r of all){
+            const pc = (r.placed||[]).length, bc = (best.placed||[]).length;
+            if (pc>bc || (pc===bc && betterLayoutByWaste(r,best, plate))) best = r;
         }
-
-        function bestVariantForCount(count) {
-            const variants = [];
-            for (const o of orients) {
-                const a = buildRowMajor(o.pw, o.ph, false, count);
-                const b = buildRowMajor(o.pw, o.ph, true, count);
-                if (a) variants.push({ o, alignRight:false, ...a });
-                if (b) variants.push({ o, alignRight:true, ...b });
-            }
-            if (!variants.length) return null;
-            // דירוג: קודם בחר קיבולת (cap) מקסימלית, ואז לפי מלבן פחת גדול ביותר
-            variants.sort((v1, v2) => {
-                if (v2.cap !== v1.cap) return v2.cap - v1.cap;
-                const maxFr = (vs) => vs.freeRects.reduce((m,r)=>Math.max(m, Math.max(0,r.w)*Math.max(0,r.h)), 0);
-                return maxFr(v2) - maxFr(v1);
-            });
-            return variants[0];
+        return best;
+    };
+    // Try single-plate fit on each candidate
+    let bestSingle = null;
+    for (const c of cands){
+        const layout = bestOnPlate(c, parts);
+        if ((layout.remaining||[]).length===0){
+            const item = { plate:c, layouts:[layout] };
+            if (!bestSingle || c.price < bestSingle.plate.price) bestSingle = item;
         }
-
-        const total = piecesMM.length;
-        const layouts = [];
-        let remaining = total;
-        let idxPiece = 0;
-        while (remaining > 0) {
-            const cand = bestVariantForCount(remaining);
-            if (!cand || cand.cap <= 0) return null;
-            const toPlace = Math.min(remaining, cand.cap);
-            // בנה הצבה מחדש עם המקורות המקוריים כדי לשמר src
-            const placed = cand.placed.map((pc) => {
-                const src = piecesMM[idxPiece++];
-                return { x: pc.x, y: pc.y, w: pc.w, h: pc.h, src };
-            });
-            layouts.push({ plate: chosen, placed, freeRects: cand.freeRects });
-            remaining -= toPlace;
-        }
-    // Return plate with normalized W/H so render logic stays consistent
-    return { plate: { ...chosen, Wmm: packW, Hmm: packH }, layouts };
     }
-    // נסה קודם מקרה מיוחד: כל החלקים נכנסים בפלטה אחת, ובסידור שורה אחת שיוצר פחת מלבני גדול אחד
-    function trySingleRowLayout() {
-    const PW = packW, PH = packH; // אריזה תמיד כשהרוחב הוא הצלע הארוכה
-        // דרישת שורה אחת: לכל חלק יש מימד שמתאים בדיוק לגובה הפלטה (±1 מ"מ)
-        const tol = 1; // מ"מ
-        const oriented = [];
-        for (const part of piecesMM) {
-            if (Math.abs(part.h - PH) <= tol) oriented.push({w: part.w, h: PH, src: part});
-            else if (Math.abs(part.w - PH) <= tol) oriented.push({w: part.h, h: PH, src: part});
-            else return null; // חלק שלא יכול למלא את הגובה -> לא שורה אחת
-        }
-        // בדוק רוחב כולל עם kerf בין חלקים ובין החלק האחרון לפחת
-        const totalW = oriented.reduce((a,p)=> a + p.w, 0) + kerfMM * Math.max(1, oriented.length); // kerf בין כל שני חלקים וגם לפני הפחת
-        if (totalW - tol > PW) return null;
-        // בנה מיקומים: החל מ-x=0, ללא kerf בשמאל (נניח חיתוך קצה קיים), kerf בין חלקים ובסוף לפני הפחת
-        let x = 0;
-        const placed = [];
-        for (let i=0;i<oriented.length;i++) {
-            const p = oriented[i];
-            placed.push({ x, y: 0, w: p.w, h: p.h, src: p.src });
-            x += p.w + kerfMM; // kerf בין חלקים
-        }
-        // מלבן הפחת בצד ימין
-        const wasteW = Math.max(0, PW - x); // kerf בין החלק האחרון לפחת כבר נכלל בחשבון x
-        const freeRects = wasteW > 0 ? [{ x, y: 0, w: wasteW, h: PH }] : [];
-        return { placed, freeRects };
-    }
+    // If a single plate can fit all parts, choose the cheapest such plate (Stage 1+2)
+    if (bestSingle) return { used: [bestSingle] };
 
-    // פריסת מדפים (Shelves) להשגת פחת מלבני יחיד מקסימלי כאשר הכל נכנס
-    function tryShelfMaxWaste() {
-    const PW = packW, PH = packH;
-        const tol = 1; // מ"מ
-        if (!piecesMM || !piecesMM.length) return null;
-        // בדיקת שטח כיסוי (כולל קירוב kerf): אם גדול מהפלטה, אין טעם לנסות
-        const totalArea = piecesMM.reduce((a,p)=> a + p.w*p.h, 0);
-        if (totalArea - tol > PW*PH) return null;
-        // בחר שתי וריאציות: "שורות" (גובה מינימלי לכל חלק) ו"עמודות" (רוחב מינימלי לכל חלק)
-        function buildShelfRows(useMinAsHeight) {
-            // Keep original dimensions for flexible per-row rotation
-            const prim = piecesMM.map(p => {
-                const minD = Math.min(p.w, p.h);
-                const maxD = Math.max(p.w, p.h);
-                const o = useMinAsHeight ? { w: maxD, h: minD } : { w: minD, h: maxD };
-                return { w: o.w, h: o.h, src: p, rawW: p.w, rawH: p.h };
-            });
-            // Sort large-first to stabilize rows
-            const items = prim.slice().sort((a,b)=> (useMinAsHeight ? (b.h - a.h) || (b.w - a.w) : (b.w - a.w) || (b.h - a.h)));
-            const rows = [];
-            let curRow = { items: [], rowH: 0, usedW: 0 };
-            const canPlaceWithDims = (r, w, h) => {
-                if (h > r.rowH && r.items.length>0) return false; // keep row height stable after first item
-                const extraKerf = r.items.length>0 ? kerfMM : 0;
-                const usedBefore = r.usedW + extraKerf;
-                const remAfter = PW - (usedBefore + w);
-                if (remAfter < -tol) return false; // doesn't fit
-                // Right-side rule: allow exact zero remainder OR require at least one kerf to waste
-                if (remAfter <= tol) return true; // exact fit to right edge: no extra kerf needed
-                return remAfter + tol >= kerfMM; // otherwise, demand >= kerf width remainder
-            };
-            const tryPlaceInExistingRows = (it) => {
-                // Attempt to place into earlier rows to keep fewer rows and larger single bottom waste.
-                for (const r of rows) {
-                    // Try primary orientation with right-kerf rule
-                    if (it.h <= r.rowH && canPlaceWithDims(r, it.w, it.h)) {
-                        const addKerf = r.items.length>0 ? kerfMM : 0;
-                        r.items.push({ w: it.w, h: it.h, src: it.src });
-                        r.usedW += addKerf + it.w;
-                        return true;
-                    }
-                    // Try rotated
-                    const rw = it.h, rh = it.w;
-                    if (rh <= r.rowH && canPlaceWithDims(r, rw, rh)) {
-                        const addKerf = r.items.length>0 ? kerfMM : 0;
-                        r.items.push({ w: rw, h: rh, src: it.src });
-                        r.usedW += addKerf + rw;
-                        return true;
-                    }
-                }
-                return false;
-            };
-            for (const it of items) {
-                // 1) Try current row (keep rowH minimal). Prefer primary orientation, else rotated if it keeps height <= current row height (or sets it on first item)
-                const firstInRow = curRow.items.length === 0;
-                // Try primary
-                if (firstInRow ? (canPlaceWithDims(curRow, it.w, it.h)) : canPlaceWithDims(curRow, it.w, it.h)) {
-                    const extraKerf = curRow.items.length>0 ? kerfMM : 0;
-                    curRow.items.push({ w: it.w, h: it.h, src: it.src });
-                    curRow.usedW += extraKerf + it.w;
-                    curRow.rowH = Math.max(curRow.rowH, it.h);
-                    continue;
-                }
-                // Try rotated in the current row if height fits current row height
-                const rw = it.h, rh = it.w;
-                if (firstInRow ? (canPlaceWithDims(curRow, rw, rh)) : canPlaceWithDims(curRow, rw, rh)) {
-                    const extraKerf = curRow.items.length>0 ? kerfMM : 0;
-                    curRow.items.push({ w: rw, h: rh, src: it.src });
-                    curRow.usedW += extraKerf + rw;
-                    curRow.rowH = Math.max(curRow.rowH, rh);
-                    continue;
-                }
-                // 2) Try to fit into any previous row's right-side remainder (allow rotation)
-                if (tryPlaceInExistingRows(it)) continue;
-                // 3) Open a new row with the orientation that minimizes the new row height
-                const chooseRot = (Math.min(it.w, it.h) <= Math.min(it.h, it.w));
-                const nw = chooseRot ? Math.min(it.w, it.h) : it.w;
-                const nh = chooseRot ? Math.max(it.w, it.h) : it.h;
-                if (curRow.items.length) rows.push(curRow);
-                curRow = { items: [{ w: nw, h: nh, src: it.src }], rowH: nh, usedW: nw };
+    // Stage 3: multi-plate packing by ascending price, one plate per iteration
+    let remaining = parts.slice();
+    const used = [];
+    let guard = 0;
+    while (remaining.length && guard < 200){
+        guard++;
+        let placedSomething = false;
+        for (const c of cands){
+            if (!remaining.length) break;
+            const layout = bestOnPlate(c, remaining);
+            if ((layout.placed||[]).length){
+                used.push({ plate:c, layouts:[layout] });
+                const ids = new Set(layout.placed.map(p=>p.src.__id));
+                remaining = remaining.filter(p=>!ids.has(p.__id));
+                placedSomething = true;
+                break; // move to next plate (next loop iteration)
             }
-            if (curRow.items.length) rows.push(curRow);
-            // חשב גובה כולל עם kerf בין שורות
-            const totalH = rows.reduce((a,r)=> a + r.rowH, 0) + kerfMM * Math.max(0, rows.length-1);
-            if (totalH - tol > PH) return null; // לא נכנס
-            // בנה מיקומים משמאל לימין, למעלה למטה
-            const placed = [];
-            let y = 0;
-            for (const r of rows) {
-                let x = 0;
-                for (let i=0;i<r.items.length;i++) {
-                    const it = r.items[i];
-                    if (i>0) x += kerfMM;
-                    placed.push({ x, y, w: it.w, h: it.h, src: it.src });
-                    x += it.w;
-                }
-                y += r.rowH + kerfMM;
-            }
-            y -= kerfMM; // הסר kerf האחרון
-            const freeRects = (PH - y > 0) ? [{ x: 0, y, w: PW, h: PH - y }] : [];
-            return { placed, freeRects };
         }
-
-        // נסה וריאציות והחזר את זו שמייצרת מלבן פחת הגדול ביותר כאשר כל החלקים שובצו
-        const variants = [ buildShelfRows(true), buildShelfRows(false) ].filter(Boolean);
-        if (!variants.length) return null;
-        // ודא שמספר החלקים שובצו במלואם
-        const full = variants.filter(v => v.placed.length === piecesMM.length);
-        if (!full.length) return null;
-        full.sort((a,b)=> {
-            const areaA = a.freeRects.reduce((m,r)=> Math.max(m, Math.max(0,r.w)*Math.max(0,r.h)), 0);
-            const areaB = b.freeRects.reduce((m,r)=> Math.max(m, Math.max(0,r.w)*Math.max(0,r.h)), 0);
-            return areaB - areaA;
-        });
-        return full[0];
+        if (!placedSomething) break;
     }
-
-    // אלגוריתם guillotine רגיל
-    function guillotineLayouts() {
-        const layouts = [];
-        let remainingPieces = piecesMM.slice().sort((a,b)=> (b.w*b.h) - (a.w*a.h));
-        while (remainingPieces.length) {
-            const freeRects = [{ x: 0, y: 0, w: packW, h: packH }];
-            const placed = [];
-            let i = 0;
-            while (i < remainingPieces.length) {
-                const part = remainingPieces[i];
-                // בחר מלבן חופשי המתאים בצורה הטובה ביותר (מינימום מכפלת עודפי רוחב*גובה)
-                let fit = null;
-                let bestCost = Infinity;
-                for (let frIdx=0; frIdx<freeRects.length; frIdx++) {
-                    const fr = freeRects[frIdx];
-                    const orients = [ {w:part.w, h:part.h}, {w:part.h, h:part.w} ];
-                    for (const o of orients) {
-                        if (o.w <= fr.w && o.h <= fr.h) {
-                            // Right/Bottom kerf rule: either exact fit to the boundary or leave >= kerf width remainder
-                            const tol = 1; // mm tolerance
-                            const remW = fr.w - o.w;
-                            const remH = fr.h - o.h;
-                            const rightOk = (Math.abs(remW) <= tol) || (remW >= kerfMM - tol);
-                            const bottomOk = (Math.abs(remH) <= tol) || (remH >= kerfMM - tol);
-                            if (!rightOk || !bottomOk) continue;
-                            const slackWX = Math.max(0, fr.w - o.w);
-                            const slackHX = Math.max(0, fr.h - o.h);
-                            const cost = slackWX * slackHX; // העדף התאמה הדוקה (טובה במיוחד לחלקים צרים/גבוהים)
-                            if (cost < bestCost) { bestCost = cost; fit = { frIdx, o }; }
-                        }
-                    }
-                }
-                if (!fit) { i++; continue; }
-                const fr = freeRects[fit.frIdx];
-                const x = fr.x, y = fr.y; const w = fit.o.w, h = fit.o.h;
-                placed.push({ x, y, w, h, src: part });
-                // Guillotine split: create two disjoint free rectangles without overlap.
-                const remainRightW = fr.w - (w + kerfMM);
-                const remainBottomH = fr.h - (h + kerfMM);
-                const areaVert = Math.max(0, remainRightW) * fr.h; // vertical split gives right full height + bottom under piece width
-                const areaHorz = fr.w * Math.max(0, remainBottomH); // horizontal split gives bottom full width + right beside piece height
-                const useVert = areaVert >= areaHorz;
-                // Always replace the consumed rect with one child and push the other if valid.
-                if (useVert) {
-                    // Vertical priority: right (full height) + bottom-left (under the piece only)
-                    const bottom = { x, y: y + h + kerfMM, w: Math.max(0, w), h: Math.max(0, remainBottomH) };
-                    const right = { x: x + w + kerfMM, y, w: Math.max(0, remainRightW), h: fr.h };
-                    // Replace consumed with larger child to reduce array churn
-                    const childA = (right.w*right.h) >= (bottom.w*bottom.h) ? right : bottom;
-                    const childB = (childA === right) ? bottom : right;
-                    freeRects.splice(fit.frIdx, 1, childA);
-                    if (childB.w > 0 && childB.h > 0) freeRects.push(childB);
-                } else {
-                    // Horizontal priority: bottom (full width) + right-top (beside the piece only)
-                    const bottom = { x, y: y + h + kerfMM, w: fr.w, h: Math.max(0, remainBottomH) };
-                    const right = { x: x + w + kerfMM, y, w: Math.max(0, remainRightW), h: Math.max(0, h) };
-                    const childA = (bottom.w*bottom.h) >= (right.w*right.h) ? bottom : right;
-                    const childB = (childA === bottom) ? right : bottom;
-                    freeRects.splice(fit.frIdx, 1, childA);
-                    if (childB.w > 0 && childB.h > 0) freeRects.push(childB);
-                }
-                remainingPieces.splice(i,1);
-            }
-            // אם לא הונחה אף חתיכה בלוח הזה, עצור כדי למנוע לולאה אין-סופית
-            if (placed.length === 0) break;
-            layouts.push({ plate: { ...chosen, Wmm: packW, Hmm: packH }, placed, freeRects });
-        }
-        return layouts;
-    }
-
-    const grid = tryIdenticalGridLayout();
-    if (grid) return grid;
-    const single = trySingleRowLayout();
-    if (single) {
-        // Always report packed (trimmed) dimensions for consistency across strategies
-        return { plate: { ...chosen, Wmm: packW, Hmm: packH, packBaseW: baseW, packBaseH: baseH, trimsMM }, layouts: [ { plate: { ...chosen, Wmm: packW, Hmm: packH }, placed: single.placed, freeRects: single.freeRects } ] };
-    }
-    const shelf = tryShelfMaxWaste();
-    if (shelf) {
-        return { plate: { ...chosen, Wmm: packW, Hmm: packH, packBaseW: baseW, packBaseH: baseH, trimsMM }, layouts: [ { plate: { ...chosen, Wmm: packW, Hmm: packH }, placed: shelf.placed, freeRects: shelf.freeRects } ] };
-    }
-    return { plate: { ...chosen, Wmm: packW, Hmm: packH, packBaseW: baseW, packBaseH: baseH, trimsMM }, layouts: guillotineLayouts() };
+    if (remaining.length===0) return { used };
+    return { used, remaining };
 }
 
 // =========================================
@@ -1362,109 +1543,71 @@ function computeOptimization() {
     const wUnit = inventoryUnits[wIdx] || '';
     const lUnit = inventoryUnits[lIdx] || '';
 
-    // קיבוץ דרישות לקורות/פלטות
-    const groupsBeams = new Map(); // key -> {type,thickness,width} => list of lengths mm
-    const groupsPlates = new Map(); // key -> {type,thickness} => list of rects mm
-
-    for (const r of reqs) {
+    // Group requirements into Beams (1D) and Plates (2D)
+    const groupsBeams = new Map(); // {type,thickness,width} => lengths(mm)
+    const groupsPlates = new Map(); // {type,thickness} => rects {w,h,tag}
+    for (const r of reqs){
         const type = r.type;
         const thickness = r.thickness;
-        const widthVal = r.width; // אם select או input
-    const classification = getClassificationFor(type, thickness);
-    if (classification && classificationIsPlate(classification)) {
-            // רוחב דרישה לפלטות נקלט מהממשק: ס"מ במטרי, אינץ' באימפריאלי
-            const wReqMM = toMM(widthVal, unitSystem === 'imperial' ? 'in' : 'cm');
-            const lReqMM = toMM(r.length, unitSystem === 'imperial' ? 'in' : 'cm');
-            if (!isFinite(wReqMM) || !isFinite(lReqMM) || wReqMM<=0 || lReqMM<=0) continue;
-            const key = JSON.stringify({type,thickness});
+        const classification = getClassificationFor(type, thickness);
+        const isPlate = classification && classificationIsPlate(classification);
+        if (isPlate){
+            const qty = Math.max(1, Number(r.qty)||1);
+            const wReqMM = toMM(Number(r.width||0), unitSystem==='imperial' ? 'in' : 'cm');
+            const hReqMM = toMM(Number(r.length||0), unitSystem==='imperial' ? 'in' : 'cm');
+            if (!isFinite(wReqMM) || !isFinite(hReqMM) || wReqMM<=0 || hReqMM<=0) continue;
+            const key = JSON.stringify({type, thickness});
             if (!groupsPlates.has(key)) groupsPlates.set(key, []);
             const list = groupsPlates.get(key);
-            for (let i=0;i<(r.qty||1);i++) list.push({ w: wReqMM, h: lReqMM, tag: (r.tag||'') });
+            for (let i=0;i<qty;i++) list.push({ w:wReqMM, h:hReqMM, tag: r.tag||'' });
         } else {
-            const lReqMM = toMM(r.length, unitSystem === 'imperial' ? 'in' : 'cm');
-            const wVal = widthVal;
+            const widthVal = r.width; // may be select value
+            const lReqMM = toMM(r.length, unitSystem==='imperial' ? 'in' : 'cm');
             if (!isFinite(lReqMM) || lReqMM<=0) continue;
-            const key = JSON.stringify({type,thickness,width: String(wVal)});
+            const key = JSON.stringify({type, thickness, width: String(widthVal)});
             if (!groupsBeams.has(key)) groupsBeams.set(key, []);
             const list = groupsBeams.get(key);
             for (let i=0;i<(r.qty||1);i++) list.push(lReqMM);
         }
     }
 
-    // ולידציה ושיוכים
     const errors = [];
-
-    // פתרון לקורות
-    const beamsResult = [];
     let totalBaseCost = 0;
-    for (const [keyStr, cuts] of groupsBeams.entries()) {
+    const beamsResult = [];
+    // Solve Beams
+    for (const [keyStr, cuts] of groupsBeams.entries()){
         const key = JSON.parse(keyStr);
-        // נסה לגזור תגית אחידה לקבוצה זו (אם כל הדרישות באותה קבוצה נשאו את אותה תג)
-        let groupTag = '';
-        try {
-            const allReqs = reqs.filter(r => String(r.type)===key.type && String(r.thickness)===key.thickness && String(r.width)===String(key.width));
-            const tags = Array.from(new Set(allReqs.map(r => (r.tag||'').trim()).filter(Boolean)));
-            groupTag = tags.length === 1 ? tags[0] : '';
-        } catch(_){ groupTag = ''; }
-        // ולידציה: האם כל חיתוך נכנס בקורה כלשהי מהמלאי (לפי הסוג/עובי/רוחב)
-        try {
-            const tIdxV = getTypeColIndex();
-            const thIdxV = getThicknessColIndex();
-            const wIdxV = getWidthColIndex();
-            const lenIdxV = getLengthColIndex();
-            const lengthUnitV = (inventoryUnits[lenIdxV] || '');
-            const stockOptionsV = inventoryData
-                .map((row, i) => ({ row, i }))
-                .filter(({row}) => String(row[tIdxV]) === key.type && String(row[thIdxV]) === key.thickness && String(row[wIdxV]) === key.width)
-                .map(({row}) => toMM(row[lenIdxV], lengthUnitV))
-                .filter(v => isFinite(v) && v > 0);
-            const maxLen = stockOptionsV.length ? Math.max(...stockOptionsV) : 0;
-            for (const c of cuts) {
-                if (c + kerfMMConst > maxLen + 1e-6) {
-                    const inchSym = '″';
-                    const reqDisp = unitSystem==='imperial' ? `${formatSmart(c/25.4)}${inchSym}` : `${formatSmart(c/10)}${language==='he'?' ס״מ':' cm'}`;
-                    const stockDisp = unitSystem==='imperial' ? `${formatSmart(maxLen/25.4)}${inchSym}` : `${formatSmart(maxLen/10)}${language==='he'?' ס״מ':' cm'}`;
-                    errors.push(language==='he'
-                        ? `חיתוך לקורה (${key.type}, עובי ${key.thickness}, רוחב ${key.width}) ארוך מהמלאי: דרוש ${reqDisp}, מקס׳ מלאי ${stockDisp}`
-                        : `Beam cut (${key.type}, thickness ${key.thickness}, width ${key.width}) exceeds stock: needs ${reqDisp}, max stock ${stockDisp}`);
-                    break;
-                }
-            }
-        } catch(e) { /* ignore */ }
         const plan = planBeamsForGroup(key, cuts, kerfMMConst);
-        if (!plan) continue;
-        totalBaseCost += plan.totalCost;
-        // בנה שורות לטבלת חיתוכים: שורה לכל קורה שנרכשה
-    plan.bars.forEach((bar, idx) => {
-            // חיתוכים: ס"מ במטרי, אינץ' באימפריאלי
-            const cutsDisp = bar.pieces.map(mm => unitSystem==='imperial' ? (mm/25.4) : (mm/10));
-            // פחת לקורות לתצוגה: ס"מ במטרי, אינץ' באימפריאלי (כמו בדיאגרמה)
+        if (!plan){
+            errors.push(language==='he' ? `לא נמצאה קורה מתאימה עבור ${key.type} ${key.thickness}/${key.width}` : `No suitable beam for ${key.type} ${key.thickness}/${key.width}`);
+            continue;
+        }
+        totalBaseCost += (plan.option.price || 0) * plan.bars.length;
+        const lenDispFromMM = (mm)=> unitSystem==='imperial' ? (mm/25.4) : (mm/1000);
+        for (const bar of plan.bars){
+            const cutsDisp = bar.pieces.map(p => unitSystem==='imperial' ? (p/25.4) : (p/10));
             const wasteDisp = unitSystem==='imperial' ? (bar.waste/25.4) : (bar.waste/10);
-            const barLenDisp = displayLenFromMM(plan.option.Lmm);
-            const wastePct = plan.option.Lmm > 0 ? (bar.waste / plan.option.Lmm) * 100 : 0;
+            const wastePct = plan.option.Lmm>0 ? (bar.waste/plan.option.Lmm)*100 : 0;
             beamsResult.push({
                 type: key.type,
-                classification: 'קורה',
+                classification: language==='he' ? 'קורה' : 'Beam',
+                material: plan.option.material || '',
                 thickness: key.thickness,
                 width: key.width,
-                lengthDisp: barLenDisp,
-                priceBase: plan.option.price,
+                lengthDisp: lenDispFromMM(plan.option.Lmm),
+                priceBase: plan.option.price || 0,
                 supplier: plan.option.supplier || '',
-                material: plan.option.material || '',
                 cutsDisp,
                 wasteDisp,
                 wastePct,
-                kerfMM: kerfMMConst,
-                itemTag: groupTag
+                kerfMM: kerfMMConst
             });
-        });
+        }
     }
-
-    // פתרון לפלטות
+    // Solve Plates
     const platesResult = [];
-    for (const [keyStr, rects] of groupsPlates.entries()) {
+    for (const [keyStr, rects] of groupsPlates.entries()){
         const key = JSON.parse(keyStr);
-        // ולידציה: ודא שכל חלק יכול להיכנס לפחות לאחת הפלטות (בכיוון כלשהו)
         try {
             const tIdxV = getTypeColIndex();
             const thIdxV = getThicknessColIndex();
@@ -1472,58 +1615,54 @@ function computeOptimization() {
             const lenIdxV = getLengthColIndex();
             const wUnitV = inventoryUnits[wIdxV] || '';
             const lUnitV = inventoryUnits[lenIdxV] || '';
-            const candidates = inventoryData
-                .map((row, i) => ({ row, i }))
-                .filter(({row}) => String(row[tIdxV]) === key.type && String(row[thIdxV]) === key.thickness)
-                .map(({row}) => ({ Wmm: toMM(row[wIdxV], wUnitV), Hmm: toMM(row[lenIdxV], lUnitV) }))
-                .filter(p => isFinite(p.Wmm) && isFinite(p.Hmm) && p.Wmm>0 && p.Hmm>0);
-            for (const part of rects) {
-                const fits = candidates.some(p => (part.w <= p.Wmm && part.h <= p.Hmm) || (part.h <= p.Wmm && part.w <= p.Hmm));
-                if (!fits) {
-                    const inchSym = '″';
+            const cands = (inventoryData||[])
+                .map((row,i)=>({row,i}))
+                .filter(({row}) => String(row[tIdxV])===key.type && String(row[thIdxV])===key.thickness && classificationIsPlate(getClassificationFor(String(row[tIdxV]), String(row[thIdxV]))))
+                .map(({row})=>({Wmm:toMM(row[wIdxV], wUnitV), Hmm:toMM(row[lenIdxV], lUnitV)}))
+                .filter(p=>isFinite(p.Wmm)&&isFinite(p.Hmm)&&p.Wmm>0&&p.Hmm>0);
+            for (const part of rects){
+                const fits = cands.some(p => (part.w<=p.Wmm && part.h<=p.Hmm) || (part.h<=p.Wmm && part.w<=p.Hmm));
+                if (!fits){
+                    const inchSym='″';
                     const wDisp = unitSystem==='imperial' ? `${formatSmart(part.w/25.4)}${inchSym}` : `${formatSmart(part.w/10)}${language==='he'?' ס״מ':' cm'}`;
                     const hDisp = unitSystem==='imperial' ? `${formatSmart(part.h/25.4)}${inchSym}` : `${formatSmart(part.h/10)}${language==='he'?' ס״מ':' cm'}`;
-                    errors.push(language==='he'
-                        ? `חיתוך לפלטה (${key.type}, עובי ${key.thickness}) גדול מדי: ${wDisp}×${hDisp} לא נכנס בשום פלטה`
-                        : `Plate part (${key.type}, thickness ${key.thickness}) too large: ${wDisp}×${hDisp} does not fit any plate`);
+                    errors.push(language==='he' ? `חלק (${key.type}, עובי ${key.thickness}) גדול מדי: ${wDisp}×${hDisp} לא נכנס בשום פלטה` : `Plate part (${key.type}, thickness ${key.thickness}) too large: ${wDisp}×${hDisp}`);
                     break;
                 }
             }
-        } catch(e) { /* ignore */ }
-    const pack = packPlatesForGroup(key, rects, kerfMMConst);
-        if (!pack) continue;
-        // עלות
-        totalBaseCost += pack.layouts.length * pack.plate.price;
-        // לכל פלטה, רשימת חלקים ומרובע פחת משוער כסכום מלבני ה-freeRects
-    for (const layout of pack.layouts) {
-            // מידות חלקים: ס"מ או אינץ'
-            const cutsDisp = layout.placed.map(p => {
-                const a = unitSystem==='imperial' ? (p.w/25.4) : (p.w/10);
-                const b = unitSystem==='imperial' ? (p.h/25.4) : (p.h/10);
-                return `${formatSmart(a)}×${formatSmart(b)}`;
-            });
-            const plateArea = pack.plate.Wmm * pack.plate.Hmm;
-            const wasteArea = layout.freeRects.reduce((a,r)=> a + Math.max(0, r.w)*Math.max(0,r.h), 0);
-            const wastePct = plateArea>0 ? (wasteArea/plateArea)*100 : 0;
-            platesResult.push({
-                type: key.type,
-                classification: 'פלטה',
-                thickness: key.thickness,
-                width: fromMM(pack.plate.Wmm, wUnit),
-                length: fromMM(pack.plate.Hmm, lUnit),
-                priceBase: pack.plate.price,
-                supplier: pack.plate.supplier || '',
-                material: pack.plate.material || '',
-                cutsDisp,
-                wasteAreaM2: (wasteArea/1_000_000), // תמיד מטר^2
-                wastePct,
-                // מידע דיאגרמה
-                plateWmm: pack.plate.Wmm,
-                plateHmm: pack.plate.Hmm,
-                kerfMM: kerfMMConst,
-                placed: layout.placed.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,srcW:p.src.w,srcH:p.src.h, tag: p.src.tag})),
-                freeRects: (layout.freeRects||[]).map(fr=>({x:fr.x,y:fr.y,w:fr.w,h:fr.h}))
-            });
+        } catch(_){ }
+        const pack = packPlatesForGroup(key, rects, kerfMMConst);
+        if (!pack || !pack.used || !pack.used.length) continue;
+        for (const used of pack.used){
+            totalBaseCost += (used.plate.price || 0) * (used.layouts?.length||0);
+            for (const layout of used.layouts){
+                const cutsDisp = layout.placed.map(p=>{
+                    const a = unitSystem==='imperial' ? (p.w/25.4) : (p.w/10);
+                    const b = unitSystem==='imperial' ? (p.h/25.4) : (p.h/10);
+                    return `${formatSmart(a)}×${formatSmart(b)}`;
+                });
+                const plateArea = used.plate.Wmm * used.plate.Hmm;
+                const wasteArea = (layout.freeRects||[]).reduce((s,r)=> s + Math.max(0,r.w)*Math.max(0,r.h), 0);
+                const wastePct = plateArea>0 ? (wasteArea/plateArea)*100 : 0;
+                platesResult.push({
+                    type: key.type,
+                    classification: language==='he'?'פלטה':'Plate',
+                    thickness: key.thickness,
+                    width: fromMM(used.plate.Wmm, wUnit),
+                    length: fromMM(used.plate.Hmm, lUnit),
+                    priceBase: used.plate.price,
+                    supplier: used.plate.supplier || '',
+                    material: used.plate.material || '',
+                    cutsDisp,
+                    wasteAreaM2: (wasteArea/1_000_000),
+                    wastePct,
+                    plateWmm: used.plate.Wmm,
+                    plateHmm: used.plate.Hmm,
+                    kerfMM: kerfMMConst,
+                    placed: layout.placed.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,srcW:p.src.w,srcH:p.src.h, tag: p.src.tag})),
+                    freeRects: (layout.freeRects||[]).map(fr=>({x:fr.x,y:fr.y,w:fr.w,h:fr.h}))
+                });
+            }
         }
     }
 
@@ -1551,25 +1690,7 @@ function computeOptimization() {
             maxProducts = Math.min(maxProducts, Math.max(1, possible));
         }
     }
-    // plates: חשב מקסימום מוצרים לפי קיבולת האריזה בפועל, בהתבסס על מספר הפלטות שנרכשו לסט אחד
-    for (const [keyStr, rects] of groupsPlates.entries()) {
-        const key = JSON.parse(keyStr);
-        const basePack = packPlatesForGroup(key, rects, kerfMMConst);
-        if (!basePack) { maxProducts = 0; continue; }
-        const platesAvailable = basePack.layouts.length;
-        // נסה להכפיל סטים עד שמספר הפלטות הנדרש חורג ממספר הפלטות הזמין לסט אחד
-        let m = 1; // לפחות סט אחד
-        while (true) {
-            const nextReq = [];
-            for (let i=0;i<m+1;i++) nextReq.push(...rects);
-            const test = packPlatesForGroup(key, nextReq, kerfMMConst);
-            if (test && test.layouts.length <= platesAvailable) {
-                m++;
-                if (m > 999) break; // מגן
-            } else break;
-        }
-        maxProducts = Math.min(maxProducts, Math.max(1, m));
-    }
+    // Plate max-products calculation removed
     if (maxProducts === Infinity) maxProducts = 1;
 
     return { beams: beamsResult, plates: platesResult, totals: { baseCurrency: inventoryPriceCurrencyUnit || '€', totalCost: totalBaseCost, maxProducts }, errors };
@@ -1605,19 +1726,13 @@ function renderResults(results) {
         const inchSym = '″';
         const cutsHeader = language==='he' ? `חיתוכים (${unitSystem==='imperial'?inchSym:'ס״מ'})` : `Cuts (${unitSystem==='imperial'?inchSym:'cm'})`;
         const wasteHeader = language==='he'
-            ? (unitSystem==='imperial' ? `פחת (${inchSym}/מטר²)` : `פחת (ס״מ/מטר²)`)
-            : (unitSystem==='imperial' ? `Waste (${inchSym}/m²)` : `Waste (cm/m²)`);
-    const rows = [];
-        const all = results.beams.concat(results.plates);
-        for (const r of all) {
-            const isBeam = r.classification === 'קורה';
-            const cuts = isBeam
-                ? (unitSystem==='imperial'
-                    ? r.cutsDisp.map(v=> `${formatSmart(v)}${inchSym}`).join(', ')
-                    : r.cutsDisp.map(v=> formatSmart(v)).join(', '))
-                : (unitSystem==='imperial'
-                    ? r.cutsDisp.map(s => s.split('×').map(v => `${v}${inchSym}`).join('×')).join(', ')
-                    : r.cutsDisp.map(x=> x.split('×').map(formatSmart).join('×')).join(', '));
+            ? (unitSystem==='imperial' ? `פחת (אינץ׳)` : `פחת (ס״מ)`)
+            : (unitSystem==='imperial' ? `Waste (inch)` : `Waste (cm)`);
+        const rows = [];
+        for (const r of results.beams) {
+            const cuts = (unitSystem==='imperial'
+                ? r.cutsDisp.map(v=> `${formatSmart(v)}${inchSym}`).join(', ')
+                : r.cutsDisp.map(v=> formatSmart(v)).join(', '));
             // המרת עובי/רוחב לתצוגה לפי יחידות
             const thIdx = getThicknessColIndex();
             const wIdx = getWidthColIndex();
@@ -1627,12 +1742,8 @@ function renderResults(results) {
             const wDisp = unitSystem==='imperial' ? convertNumberByUnit(r.width, wU, 'imperial') : Number(r.width);
             const thCell = unitSystem==='imperial' ? `${formatSmart(thDisp)}${inchSym}` : `${formatSmart(thDisp)}`;
             const wCell = unitSystem==='imperial' ? `${formatSmart(wDisp)}${inchSym}` : `${formatSmart(wDisp)}`;
-            const lenCell = isBeam
-                ? (unitSystem==='imperial' ? `${formatSmart(r.lengthDisp)}${inchSym}` : `${formatSmart(r.lengthDisp)}`)
-                : (unitSystem==='imperial' ? `${formatSmart(displayLenFromMM(toMM(r.length, lU)))}${inchSym}` : `${formatSmart(displayLenFromMM(toMM(r.length, lU)))}`);
-            const wasteVal = isBeam
-                ? (unitSystem==='imperial' ? `${formatSmart(r.wasteDisp)}${inchSym}` : `${formatSmart(r.wasteDisp)}`)
-                : `${formatSmart(r.wasteAreaM2)}`;
+            const lenCell = unitSystem==='imperial' ? `${formatSmart(r.lengthDisp)}${inchSym}` : `${formatSmart(r.lengthDisp)}`;
+            const wasteVal = unitSystem==='imperial' ? `${formatSmart(r.wasteDisp)}${inchSym}` : `${formatSmart(r.wasteDisp)}`;
             const row = [];
             row.push(r.type);
             if (resultsColSettings.showClassification) row.push(r.classification);
@@ -1645,6 +1756,29 @@ function renderResults(results) {
             row.push(cuts);
             if (resultsColSettings.showWasteValue) row.push(wasteVal);
             if (resultsColSettings.showWastePct) row.push(`${formatSmart(r.wastePct)}%`);
+            rows.push(row);
+        }
+        // Plates rows (added)
+        for (const r of (results.plates||[])) {
+            const thDisp = unitSystem==='imperial' ? convertNumberByUnit(r.thickness, thU, 'imperial') : Number(r.thickness);
+            const wDisp = unitSystem==='imperial' ? convertNumberByUnit(r.width, wU, 'imperial') : Number(r.width);
+            const lenDisp = unitSystem==='imperial' ? (Number(r.plateHmm)/25.4) : (Number(r.plateHmm)/1000); // plate length shown in Length column header units
+            const thCell = unitSystem==='imperial' ? `${formatSmart(thDisp)}${inchSym}` : `${formatSmart(thDisp)}`;
+            const wCell = unitSystem==='imperial' ? `${formatSmart(wDisp)}${inchSym}` : `${formatSmart(wDisp)}`;
+            const lenCell = unitSystem==='imperial' ? `${formatSmart(lenDisp)}${inchSym}` : `${formatSmart(lenDisp)}`;
+            const cuts = (r.cutsDisp||[]).join(', ');
+            const row = [];
+            row.push(r.type);
+            if (resultsColSettings.showClassification) row.push(r.classification|| (language==='he'?'פלטה':'Plate'));
+            if (resultsColSettings.showMaterial) row.push(r.material || '');
+            row.push(thCell);
+            row.push(wCell);
+            row.push(lenCell);
+            row.push(`${formatSmart(convertBaseToDisplayCurrency(r.priceBase||0))}`);
+            if (resultsColSettings.showSupplier) row.push(r.supplier || '');
+            row.push(cuts);
+            if (resultsColSettings.showWasteValue) row.push('–'); // plate waste is area; leave length-based waste empty
+            if (resultsColSettings.showWastePct) row.push(`${formatSmart(r.wastePct||0)}%`);
             rows.push(row);
         }
         const headers = (function(){
@@ -1696,9 +1830,11 @@ function renderResults(results) {
         const thU = inventoryUnits[thIdx] || '';
         const wU = inventoryUnits[wIdx] || '';
         const lU = inventoryUnits[lIdx] || '';
-        const all = results.beams.concat(results.plates);
+        const all = ([]).concat(results.beams||[], results.plates||[]);
         for (const r of all) {
-            const lenVal = r.classification==='קורה' ? r.lengthDisp : displayLenFromMM(toMM(r.length, lU));
+            const lenVal = (typeof r.lengthDisp !== 'undefined')
+                ? r.lengthDisp
+                : (unitSystem==='imperial' ? (Number(r.plateHmm)||0)/25.4 : (Number(r.plateHmm)||0)/1000);
             const key = JSON.stringify({type:r.type,cls:r.classification,th:r.thickness,w:r.width,len:lenVal});
             const cur = map.get(key) || {type:r.type,cls:r.classification,th:r.thickness,w:r.width,len:lenVal,qty:0};
             cur.qty += 1;
@@ -1831,29 +1967,29 @@ function renderResults(results) {
             idx++;
         }
         // plates diagrams
-        for (const p of results.plates) {
-            // כותרת: מטרי — רוחב×אורך במ׳, עובי במ"מ; אימפריאלי — הכל באינצ׳ (″)
-            const wMM = toMM(p.width, inventoryUnits[getWidthColIndex()]||'');
-            const lMM = toMM(p.length, inventoryUnits[getLengthColIndex()]||'');
-            const thMM = toMM(p.thickness, inventoryUnits[getThicknessColIndex()]||'');
+        for (const r of (results.plates||[])) {
+            const thIdx = getThicknessColIndex();
+            const thU = inventoryUnits[thIdx] || '';
+            const thMM = toMM(r.thickness, thU);
+            const Wmm = Number(r.plateWmm)||0;
+            const Hmm = Number(r.plateHmm)||0;
             const inchSym = '″';
             let title;
             if (unitSystem === 'imperial') {
-                const wIn = wMM/25.4, lIn = lMM/25.4, thIn = thMM/25.4;
-                title = language==='he'
-                    ? `פריט ${idx} — ${p.type} ${formatSmart(wIn)}${inchSym}×${formatSmart(lIn)}${inchSym} , עובי ${formatSmart(thIn)}${inchSym}`
-                    : `Item ${idx} — ${p.type} ${formatSmart(wIn)}${inchSym}×${formatSmart(lIn)}${inchSym} , thickness ${formatSmart(thIn)}${inchSym}`;
+                const thIn = thMM/25.4, wIn = Wmm/25.4, hIn = Hmm/25.4;
+                title = (language==='he')
+                    ? `פריט ${idx} — ${r.type} ${formatSmart(thIn)}${inchSym}×${formatSmart(wIn)}${inchSym}×${formatSmart(hIn)}${inchSym}`
+                    : `Item ${idx} — ${r.type} ${formatSmart(thIn)}${inchSym}×${formatSmart(wIn)}${inchSym}×${formatSmart(hIn)}${inchSym}`;
             } else {
-                const wM = wMM/1000, lM = lMM/1000;
-                title = language==='he'
-                    ? `פריט ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} מ׳*מ׳ , עובי ${formatSmart(thMM)} מ״מ`
-                    : `Item ${idx} — ${p.type} ${formatSmart(wM)}×${formatSmart(lM)} m*m , thickness ${formatSmart(thMM)} mm`;
+                title = (language==='he')
+                    ? `פריט ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(Wmm)}×${formatSmart(Hmm)} מ״מ`
+                    : `Item ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(Wmm)}×${formatSmart(Hmm)} mm`;
             }
             const h3Dir = (language==='he') ? ' dir="rtl"' : '';
-            parts.push(`<div class="results-section"><h3 class="item-title"${h3Dir}>${title}</h3>${plateSvg(p)}</div>`);
+            parts.push(`<div class="results-section"><h3 class="item-title"${h3Dir}>${title}</h3>${plateSvg(r)}</div>`);
             idx++;
         }
-    return parts.join('');
+        return parts.join('');
     }
 
     function beamSvg(r) {
@@ -2033,255 +2169,143 @@ function renderResults(results) {
     return `<svg class="diagram" data-kind="beam" viewBox="0 ${-extraTop} ${w} ${h + extraTop}" preserveAspectRatio="none">${defs}${rects.join('')}${baseLineLeft}${baseLineRight}${rulerText}${baseLineVTop}${baseLineVBot}${widthText}</svg>`;
     }
 
-    function plateSvg(p) {
-        // ציור פרופורציונלי לפלטה ולחלקים שעליה
-    const viewW = 1000, viewH = 600;
-    const svgId = `svg_${svgIdCounter++}`;
-    const showLabels = !!displaySettings.showPieceLabels;
-    // אחידות גודל פונט בין פלטות לקורות: נגזור מגובה תא ממוצע
-    const clamp = (v,min,max) => Math.min(max, Math.max(min, v));
-    const baseFS = clamp(Math.round(80 * 0.28), 12, 20); // יעד קריאות מיידי
-    // אחוד גודל פונט: השתמש בערכי 13/12 כדי להשוות למידות הפלטה
-    const fsLarge = 13, fsMed = 13, fsSmall = 12;
-    // גופן זהה לטבלאות
-    const fontFamily = (language==='he')
-        ? "'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial"
-        : "'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
-    const fontFamilyAttr = `font-family="${fontFamily}"`;
-    // Full plate dims (before trims) if available
-    const baseWmmAll = p.baseWmm || p.plateWmm || toMM(p.width, inventoryUnits[getWidthColIndex()]||'');
-    const baseHmmAll = p.baseHmm || p.plateHmm || toMM(p.length, inventoryUnits[getLengthColIndex()]||'');
-    let PW = baseWmmAll;
-    let PH = baseHmmAll;
-        // וודא שהצלע הארוכה לרוחב
-        let rotated = false;
-        if (PH > PW) { const tmp = PW; PW = PH; PH = tmp; rotated = true; }
-        const scale = PW>0 ? (viewW / PW) : 1;
-        const platePxW = viewW;
-    const platePxH = Math.max(80, Math.min(viewH, Math.round(PH * scale)));
-    const extraBottom = 36; // מקום לטקסט מחוץ לפלטה — רווח גדול יותר מהפלטה
-    const rects = [];
-    const kerfRects = [];
-    const labelElems = [];
-        // רקע פחת
-        const defs = `
-            <defs>
-                <pattern id="${svgId}_wasteHatchPlate" patternUnits="userSpaceOnUse" width="8" height="8">
-                    <g stroke="#c8c8c8" stroke-width="2">
-                        <line x1="0" y1="8" x2="8" y2="0" />
-                    </g>
-                </pattern>
-            </defs>`;
-        // בסיס: רקע ניטרלי
-    rects.push(`<rect x="0" y="0" width="${platePxW}" height="${platePxH}" fill="#f3f3f3" stroke="#cfd4da" />`);
-    // Pack (effective) area offset by trims
-    const trims = p.trims || p.trimsMM || { t:0,b:0,l:0,r:0 };
-    // In normalized orientation, top/bottom align with PH and left/right with PW; if rotated, swap accordingly
-    // אין להחליף טרימים — הפלטה תמיד מוצגת לרוחב, הטרימים נשארים לפי שמותיהם
-    const tmm = trims.t||0, bmm = trims.b||0, lmm = trims.l||0, rmm = trims.r||0;
-    const packPxX = lmm * scale, packPxY = tmm * scale;
-    const effWmm = Math.max(0, PW - (lmm + rmm));
-    const effHmm = Math.max(0, PH - (tmm + bmm));
-    const packPxW = (p.plateWmm || effWmm) * scale;
-    const packPxH = (p.plateHmm || effHmm) * scale;
-    // צבעי פסטל וקבוצות זהות (לפי מידות מקוריות mm)
-        const palette = ['#dfe8d8','#e9e2d0','#e8d9d4','#dbe7e5','#e8e3ef','#f2e6de'];
+    function plateSvg(r) {
+        // Landscape plate diagram with piece and waste rectangles, labels, and rulers
+        const svgId = `svg_${svgIdCounter++}`;
+        const W0 = Number(r.plateWmm)||0;
+        const H0 = Number(r.plateHmm)||0;
+        const rotate = H0 > W0; // force landscape
+        const W = rotate ? H0 : W0;
+        const H = rotate ? W0 : H0;
+        const w = 1000;
+        let isMobile = false;
+        try { if (typeof window !== 'undefined') { isMobile = (window.matchMedia && window.matchMedia('(max-width: 840px)').matches) || (window.innerWidth <= 840); } } catch(_){ isMobile = false; }
+        const leftPad = 34, rightPad = 10, topPad = 12, bottomPad = 40;
+        const drawW = Math.max(100, w - leftPad - rightPad);
+        const scale = W>0 ? (drawW / W) : 1;
+        const drawH = Math.max(60, Math.round(H * scale));
+        const h = topPad + drawH + bottomPad;
+    const kerfMMConst = isFinite(Number(r.kerfMM)) ? Number(r.kerfMM) : 3;
+    const displayKerfMM = Math.max(15, kerfMMConst); // display-only kerf rule for plate diagrams
+        const showLabels = !!displaySettings.showPieceLabels;
+        const fontFamily = (language==='he')
+            ? "'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial"
+            : "'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
+        const fontFamilyAttr = `font-family="${fontFamily}"`;
+        const fsLarge = 13, fsMed = 13, fsSmall = 12;
+        const toDispFromMM = (mmVal) => {
+            if (unitSystem==='imperial') return mmVal/25.4; // inch
+            const u = displaySettings.displayUnit || 'cm';
+            if (u==='mm') return mmVal;
+            if (u==='m') return mmVal/1000;
+            return mmVal/10; // cm
+        };
+        const convNum = (mmVal) => formatSmart(toDispFromMM(mmVal));
+        const plateToDisplay = (x,y,w,h) => {
+            if (!rotate) return {x,y,w,h};
+            // rotate 90deg: newX = y, newY = W0 - x - w, newW = h, newH = w
+            return { x: y, y: W0 - x - w, w: h, h: w };
+        };
+        const rects = [];
+        const clipDefs = [];
+        // Plate background
+        const plateX = leftPad, plateY = topPad;
+        rects.push(`<rect x="${plateX}" y="${plateY}" width="${drawW}" height="${drawH}" fill="#ffffff" stroke="#cfd4da" />`);
+        // Pieces
+        const placed = (r.placed||[]).map(p=> plateToDisplay(p.x,p.y,p.w,p.h));
+        // Color by size ignoring orientation (unordered width/height), use original source dims when available
         const groups = {};
-        const keyFor = (wmm,hmm) => `${Math.round(wmm)}x${Math.round(hmm)}`;
-        (p.placed||[]).forEach(pc=> { groups[keyFor(pc.srcW, pc.srcH)] = true; });
+        const keyForIdx = (i)=>{
+            const srcW = Number(r.placed?.[i]?.srcW);
+            const srcH = Number(r.placed?.[i]?.srcH);
+            const a = isFinite(srcW) ? srcW : placed[i].w;
+            const b = isFinite(srcH) ? srcH : placed[i].h;
+            const lo = Math.round(Math.min(a,b));
+            const hi = Math.round(Math.max(a,b));
+            return `${lo}x${hi}`;
+        };
+        for (let i=0;i<placed.length;i++){ groups[keyForIdx(i)] = true; }
+        const palette = ['#dfe8d8','#e9e2d0','#e8d9d4','#dbe7e5','#e8e3ef','#f2e6de'];
         const groupColor = {}; let gi=0; Object.keys(groups).forEach(k=>{groupColor[k]=palette[gi%palette.length];gi++;});
-    // ציור החלקים לפי מיקום; אם הפלטה הוחלפה לרוחב, סובב קואורדינטות
-        const pieceRectsPx = [];
-    (p.placed||[]).forEach((pc, i) => {
-            // ציור בלבד: אם סובבנו להצגה, נשמור על מיקומי החלקים כפי שחושבו (x,y בתוך pack לפי Wmm×Hmm המקוריים)
-            let x = pc.x, y = pc.y, wmm = pc.w, hmm = pc.h;
-            // Offset by trims so pieces sit inside the pack area
-            let px = packPxX + x * scale, py = packPxY + y * scale, pw = Math.max(0.5, wmm * scale), ph = Math.max(0.5, hmm * scale);
-            // Clamp to pack area to avoid overflow drawing
-            const packRight = packPxX + packPxW, packBottom = packPxY + packPxH;
-            if (px < packPxX) { pw -= (packPxX - px); px = packPxX; }
-            if (py < packPxY) { ph -= (packPxY - py); py = packPxY; }
-            if (px + pw > packRight) pw = Math.max(0.5, packRight - px);
-            if (py + ph > packBottom) ph = Math.max(0.5, packBottom - py);
-            pieceRectsPx.push({x:px, y:py, w:pw, h:ph});
-            const key = keyFor(pc.srcW, pc.srcH);
-            const clipId = `${svgId}_plate_clip_${i}`;
-            rects.push(`<defs><clipPath id="${clipId}"><rect x="${px}" y="${py}" width="${pw}" height="${ph}" /></clipPath></defs>`);
-            const fillColor = displaySettings.colorPieces ? (groupColor[key]||'#eaf4ea') : '#ffffff';
-            const tagText = (pc.tag ? String(pc.tag) : (pc.src && pc.src.tag ? String(pc.src.tag) : ''));
-            const dataTag = tagText ? ` data-tag="${String(tagText).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"` : '';
-            rects.push(`<rect data-piece="1" data-kind="plate-piece" data-w-mm="${wmm}" data-h-mm="${hmm}"${dataTag} x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${fillColor}" stroke="#cfd4da" />`);
-            // המרת יחידות לתצוגה על החלקים
-            const toDispFromMM = (mmVal) => {
-                if (unitSystem==='imperial') return mmVal/25.4; // inch
-                const u = displaySettings.displayUnit || 'cm';
-                if (u==='mm') return mmVal;
-                if (u==='m') return mmVal/1000;
-                return mmVal/10; // cm
-            };
-            const wDisp = toDispFromMM(wmm);
-            const hDisp = toDispFromMM(hmm);
-            const wNum = `${formatSmart(wDisp)}`;
-            const hNum = `${formatSmart(hDisp)}`;
-            const cx = px + pw/2, cy = py + ph/2;
-            if (displaySettings.showPieceLabels) {
+        const toPx = (mm)=> mm * scale;
+        for (let i=0;i<placed.length;i++){
+            const p = placed[i];
+            const x = plateX + toPx(p.x);
+            const y = plateY + toPx(p.y);
+            const pw = Math.max(1, toPx(p.w));
+            const ph = Math.max(1, toPx(p.h));
+            const gkey = keyForIdx(i);
+            const fillColor = displaySettings.colorPieces ? (groupColor[gkey]) : '#ffffff';
+            const clipId = `${svgId}_clip_p_${i}`;
+            clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${pw}" height="${ph}" /></clipPath>`);
+            // data attrs for popup: width=horizontal, height=vertical after display orientation
+            rects.push(`<rect data-piece="1" data-kind="plate-piece" data-w-mm="${p.w}" data-h-mm="${p.h}" ${r.placed[i]?.tag?`data-tag="${String(r.placed[i].tag).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"`:''} x="${x}" y="${y}" width="${pw}" height="${ph}" fill="${fillColor}" stroke="#cfd4da" />`);
+            if (showLabels) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-                // Force numeric direction to LTR to avoid bidi clipping in RTL
-                const dirAttr = ' direction="ltr"';
-                // עליון (האורך האופקי): ממורכז במרכז החלק העליון
-                const topX = cx, topY = py + 14;
-                if (pw > 24 && ph > 18) labelElems.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${topX}" y="${topY}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="hanging" fill="#333">${wNum}</text>`);
-                // שמאל (גובה אנכי): באמצע הצד השמאלי בתוך החתיכה, עם מרווח פנימי קטן
-                const leftX = px + 14, leftY = py + ph/2;
-                if (pw > 18 && ph > 24) labelElems.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${leftX}" y="${leftY}" font-size="${fsMed}" text-anchor="start" dominant-baseline="middle" transform="rotate(-90 ${leftX} ${leftY})" fill="#333">${hNum}</text>`);
+                const topY = y + 12;
+                const cx = x + pw/2;
+                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${topY}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="hanging" fill="#333">${convNum(p.w)}</text>`);
+                const sideX = x + 12;
+                const cy = y + ph/2;
+                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${sideX}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 ${sideX} ${cy})" fill="#333">${convNum(p.h)}</text>`);
             }
-            // Tag (center) independent of labels
-            if (displaySettings.showTags && tagText) {
+            if (displaySettings.showTags && r.placed[i]?.tag) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-                labelElems.push(`<text ${weightAttr} ${fontFamilyAttr} x="${cx}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#222">${tagText}</text>`);
+                const cx = x + pw/2;
+                const cy = y + ph/2;
+                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#222">${String(r.placed[i].tag)}</text>`);
             }
-    });
-        // Kerf rendering for plates (row-aware):
-        // 1) Full-width horizontal rip at the bottom of each occupied row.
-        // 2) Vertical kerf only within the row between adjacent pieces and at row right boundary to waste.
-        if (pieceRectsPx.length){
-            const kerfPx = Math.max(1, (p.kerfMM||3) * (platePxW / Math.max(1, (p.plateWmm||PW||1))));
-            const tol = 1; // px tolerance
-            const leftEdge = Math.round(packPxX), rightEdge = Math.round(packPxX + packPxW);
-            const topEdge = Math.round(packPxY), bottomEdge = Math.round(packPxY + packPxH);
-
-            // Group pieces into rows by their top Y (within tolerance)
-            const rows = [];
-            for (const rc of pieceRectsPx){
-                const yTop = Math.round(rc.y);
-                let row = rows.find(r => Math.abs(r.yTop - yTop) <= tol);
-                if (!row){
-                    row = { yTop, yBottom: Math.round(rc.y + rc.h), pieces: [] };
-                    rows.push(row);
-                }
-                row.yTop = Math.min(row.yTop, Math.round(rc.y));
-                row.yBottom = Math.max(row.yBottom, Math.round(rc.y + rc.h));
-                row.pieces.push(rc);
-            }
-            rows.sort((a,b)=>a.yTop - b.yTop);
-
-            for (const row of rows){
-                const y0 = row.yTop;
-                const y1 = row.yBottom;
-                const rowH = Math.max(1, y1 - y0);
-                // Horizontal rip at row bottom across entire plate width (first cut separating the strip)
-                if (y1 < bottomEdge - 0.5){
-                    const ky = Math.round(y1);
-                    const h = Math.min(Math.max(1, Math.round(kerfPx)), Math.max(1, bottomEdge - ky));
-                    if (h > 0.5) kerfRects.push(`<rect class="non-interactive" x="${leftEdge}" y="${ky}" width="${Math.max(1,rightEdge-leftEdge)}" height="${h}" fill="url(#${svgId}_wasteHatchPlate)" />`);
-                }
-                // Vertical kerf between adjacent pieces inside the row
-                const parts = row.pieces.slice().sort((a,b)=>a.x - b.x);
-                for (let i=0;i<parts.length-1;i++){
-                    const A = parts[i], B = parts[i+1];
-                    const gap = Math.round(B.x) - Math.round(A.x + A.w);
-                    if (Math.abs(gap - kerfPx) <= tol){
-                        const x0 = Math.round(A.x + A.w);
-                        const w = Math.max(1, Math.round(kerfPx));
-                        kerfRects.push(`<rect class="non-interactive" x="${x0}" y="${y0}" width="${w}" height="${rowH}" fill="url(#${svgId}_wasteHatchPlate)" />`);
-                    }
-                }
-                // Vertical kerf at row right boundary (piece-to-waste) if needed
-                const last = parts[parts.length-1];
-                if (last){
-                    const rx = Math.round(last.x + last.w);
-                    const gapR = Math.round(rightEdge - rx);
-                    if (gapR > 0.5){
-                        const w = Math.min(Math.max(1, Math.round(kerfPx)), gapR);
-                        kerfRects.push(`<rect class="non-interactive" x="${rx}" y="${y0}" width="${w}" height="${rowH}" fill="url(#${svgId}_wasteHatchPlate)" />`);
-                    }
-                }
-            }
-            // Pack outline
-            rects.push(`<rect class="non-interactive" x="${leftEdge}" y="${topEdge}" width="${Math.max(0, rightEdge-leftEdge)}" height="${Math.max(0, bottomEdge-topEdge)}" fill="none" stroke="#bdbdbd" stroke-width="1" />`);
         }
-    // ציור והצגת מידות לכל מלבן פחת (freeRects) — פחת מוצג באפור בלבד
-    if (Array.isArray(p.freeRects) && p.freeRects.length) {
-            // Prepare adjacency helpers in pixel space to detect kerf-at-waste boundaries
-            const tolPx = Math.max(1, Math.round(scale * 0.6));
-            const piecesPx = pieceRectsPx.slice();
-            const kerfMMval = Number(p.kerfMM || 3) || 3;
-            const isOverlap = (a0,a1,b0,b1) => (Math.min(a1,b1) - Math.max(a0,b0)) > tolPx;
-            for (let i=0;i<p.freeRects.length;i++) {
-                const fr = p.freeRects[i];
-                if (!fr || fr.w <= 0 || fr.h <= 0) continue;
-                // Account for dimension-visual rotation only for drawing; keep mm for labeling
-                let x = fr.x, y = fr.y, wmm = fr.w, hmm = fr.h;
-                if (rotated) { x = fr.y; y = fr.x; wmm = fr.h; hmm = fr.w; }
-                const px = packPxX + x * scale, py = packPxY + y * scale, pw = wmm * scale, ph = hmm * scale;
-                rects.push(`<rect class="non-interactive" x="${px}" y="${py}" width="${Math.max(0.5,pw)}" height="${Math.max(0.5,ph)}" fill="#f3f3f3" stroke="#bdbdbd" stroke-width="1" />`);
-                // Labels (numbers only). Adjust for kerf at boundaries with adjacent piece-to-waste cut.
+        // Waste: recompute a partition of empty area via repeated maximal empty rectangles (keeps only relevant waste and spacing)
+        try {
+            const basePlaced = (r.placed||[]).map(p=> ({x:p.x,y:p.y,w:p.w,h:p.h}));
+            const maxRects = computeAllEmptyRects(basePlaced, W0, H0, displayKerfMM, 200);
+            const wasteRects = maxRects.map(fr => plateToDisplay(fr.x, fr.y, fr.w, fr.h));
+            for (let i=0;i<wasteRects.length;i++){
+                const fr = wasteRects[i];
+                if (fr.w<=0 || fr.h<=0) continue;
+                const x = plateX + toPx(fr.x);
+                const y = plateY + toPx(fr.y);
+                const pw = Math.max(1, toPx(fr.w));
+                const ph = Math.max(1, toPx(fr.h));
+                const clipId = `${svgId}_clip_w_${i}`;
+                clipDefs.push(`<clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${pw}" height="${ph}" /></clipPath>`);
+                rects.push(`<rect x="${x}" y="${y}" width="${pw}" height="${ph}" fill="#f3f3f3" />`);
                 if (showLabels) {
-                    // Detect if this free rect touches a piece on its left edge (vertical kerf should be inside this waste)
-                    let subtractWmm = 0;
-                    const leftEdge = px;
-                    for (const pc of piecesPx) {
-                        const pcRight = pc.x + pc.w;
-                        if (Math.abs(pcRight - leftEdge) <= tolPx && isOverlap(pc.y, pc.y + pc.h, py, py + ph)) {
-                            subtractWmm = kerfMMval; // kerf resides within this waste width label
-                            break;
-                        }
-                    }
-                    // Detect if this free rect touches a piece on its top edge (horizontal kerf should be inside this waste)
-                    let subtractHmm = 0;
-                    const topEdge = py;
-                    for (const pc of piecesPx) {
-                        const pcBottom = pc.y + pc.h;
-                        if (Math.abs(pcBottom - topEdge) <= tolPx && isOverlap(pc.x, pc.x + pc.w, px, px + pw)) {
-                            subtractHmm = kerfMMval;
-                            break;
-                        }
-                    }
-                    const adjWmm = Math.max(0, wmm - subtractWmm);
-                    const adjHmm = Math.max(0, hmm - subtractHmm);
-                    const toDispFromMM = (mmVal) => {
-                        if (unitSystem==='imperial') return mmVal/25.4; // inch
-                        const u = displaySettings.displayUnit || 'cm';
-                        if (u==='mm') return mmVal;
-                        if (u==='m') return mmVal/1000;
-                        return mmVal/10; // cm
-                    };
-                    const wNum = `${formatSmart(toDispFromMM(adjWmm))}`;
-                    const hNum = `${formatSmart(toDispFromMM(adjHmm))}`;
-                    const cx = px + pw/2;
                     const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-                    const dirAttr = ' direction="ltr"';
-                    const topX = cx, topY = py + 14;
-                    labelElems.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} x="${topX}" y="${topY}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="hanging" fill="#666">${wNum}</text>`);
-                    const leftXw = px + 14, leftYw = py + ph/2;
-                    labelElems.push(`<text${dirAttr} ${weightAttr} ${fontFamilyAttr} x="${leftXw}" y="${leftYw}" font-size="${fsMed}" text-anchor="start" dominant-baseline="middle" transform="rotate(-90 ${leftXw} ${leftYw})" fill="#666">${hNum}</text>`);
+                    const cx = x + pw/2;
+                    const cy = y + ph/2;
+                    rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#666">${convNum(fr.w)}×${convNum(fr.h)}</text>`);
                 }
             }
-        }
-    // מידות הפלטה: מספרים בלבד, מוצגים מחוץ לפלטה — עליון ושמאלי
-    const origWmmRaw = (p.baseWmm || p.plateWmm || toMM(p.width, inventoryUnits[getWidthColIndex()]||''));
-    const origHmmRaw = (p.baseHmm || p.plateHmm || toMM(p.length, inventoryUnits[getLengthColIndex()]||''));
-    // Ensure long side is shown on top and short on the left regardless of internal orientation
-    const origWmm = Math.max(origWmmRaw, origHmmRaw);
-    const origHmm = Math.min(origWmmRaw, origHmmRaw);
-    const dispFactor = unitSystem==='imperial' ? (1/25.4) : (displaySettings.displayUnit==='m' ? 1/1000 : (displaySettings.displayUnit==='cm' ? 1/10 : 1));
-    const wDisp = origWmm * dispFactor;
-    const hDisp = origHmm * dispFactor;
-    const wStr = `${formatSmart(wDisp)}`;
-    const hStr = `${formatSmart(hDisp)}`;
-    const weightSize = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
-    const topLabelY = -12; // מרווח אחיד למעלה
-    const topLabel = `<text ${weightSize} ${fontFamilyAttr} x="${platePxW/2}" y="${topLabelY}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="#444">${wStr}</text>`;
-    const rulerTopY = topLabelY;
-    const rulerTop = `<line x1="0" y1="${rulerTopY}" x2="${platePxW/2 - 40}" y2="${rulerTopY}" stroke="#ccc" stroke-width="1" /><line x1="${platePxW/2 + 40}" y1="${rulerTopY}" x2="${platePxW}" y2="${rulerTopY}" stroke="#ccc" stroke-width="1" />`;
-    const leftLabelX = -28; // shift a bit further left to prevent Hebrew digits clipping
-    const leftLabel = `<text ${weightSize} ${fontFamilyAttr} x="${leftLabelX}" y="${platePxH/2}" font-size="13" text-anchor="end" dominant-baseline="middle" fill="#444" transform="rotate(-90 ${leftLabelX} ${platePxH/2})">${hStr}</text>`;
-    const rulerLeftX = leftLabelX;
-    const rulerLeftTop = `<line x1="${rulerLeftX}" y1="0" x2="${rulerLeftX}" y2="${platePxH/2 - 40}" stroke="#ccc" stroke-width="1" />`;
-    const rulerLeftBot = `<line x1="${rulerLeftX}" y1="${platePxH/2 + 40}" x2="${rulerLeftX}" y2="${platePxH}" stroke="#ccc" stroke-width="1" />`;
-    // הרחבת ה-viewBox לשוליים עליונים ושמאליים כך שהכיתובים ייראו
-    const topMargin = 38, leftMargin = 34, bottomMargin = 40;
-    return `<svg class="diagram" data-kind="plate" viewBox="-${leftMargin} -${topMargin} ${viewW + leftMargin} ${platePxH + topMargin + bottomMargin}" preserveAspectRatio="none">${defs}${rulerTop}${topLabel}${leftLabel}${rulerLeftTop}${rulerLeftBot}${rects.join('')}${kerfRects.join('')}${labelElems.join('')}</svg>`;
+        } catch(_){ }
+        // Rulers
+        const weightBase = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
+        // bottom horizontal number only with split baseline lines
+        const plateLenLbl = `${convNum(W)}`;
+        const lineY = topPad + drawH + 20;
+        const txt = plateLenLbl;
+        const approxTextW = Math.max(60, txt.length * 7);
+        const gap = approxTextW + 16;
+        const halfGap = gap/2;
+        const barLeft = plateX, barRight = plateX + drawW;
+        const center = (barLeft + barRight)/2;
+        const leftX2 = Math.max(barLeft, center - halfGap);
+        const rightX1 = Math.min(barRight, center + halfGap);
+        const baseLineLeft = showLabels ? `<line x1="${barLeft}" y1="${lineY}" x2="${leftX2}" y2="${lineY}" stroke="#ccc" stroke-width="1" />` : '';
+        const baseLineRight = showLabels ? `<line x1="${rightX1}" y1="${lineY}" x2="${barRight}" y2="${lineY}" stroke="#ccc" stroke-width="1" />` : '';
+        const rulerText = showLabels ? `<text ${weightBase} ${fontFamilyAttr} x="${center}" y="${lineY}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="#444">${plateLenLbl}</text>` : '';
+        // left vertical
+        const heightLbl = `${convNum(H)}`;
+        const rulerLeftX = Math.max(6, leftPad - 10);
+        const yTop = plateY, yBot = plateY + drawH;
+        const yMid = (yTop + yBot)/2;
+        const vGap = 22;
+        const baseLineVTop = showLabels ? `<line x1="${rulerLeftX}" y1="${yTop}" x2="${rulerLeftX}" y2="${yMid - vGap/2}" stroke="#ccc" stroke-width="1" />` : '';
+        const baseLineVBot = showLabels ? `<line x1="${rulerLeftX}" y1="${yMid + vGap/2}" x2="${rulerLeftX}" y2="${yBot}" stroke="#ccc" stroke-width="1" />` : '';
+        const widthText = showLabels ? `<text ${weightBase} ${fontFamilyAttr} x="${rulerLeftX+2}" y="${yMid}" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="#444" transform="rotate(-90 ${rulerLeftX+2} ${yMid})">${heightLbl}</text>` : '';
+        const defs = `<defs>${clipDefs.join('')}</defs>`;
+        return `<svg class="diagram" data-kind="plate" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${defs}${rects.join('')}${baseLineLeft}${baseLineRight}${rulerText}${baseLineVTop}${baseLineVBot}${widthText}</svg>`;
     }
 
     const title1 = language==='he' ? 'חיתוכים' : 'Cuts';
@@ -2647,17 +2671,6 @@ try {
             </div>
             <hr style="border:none;border-top:1px solid #eee;margin:8px 0" />
                         <div class="row">
-                            <span>${he ? 'חתוך קצוות (2D)' : 'Edge trim (2D)'} <span class="lock" aria-hidden="true">🔒</span></span>
-              <span id="edge-switch" class="switch" data-on="${sawAdv.edgeTrimOn ? 1 : 0}"><span class="knob"></span></span>
-            </div>
-                        <div id="edge-fields" class="trim-grid" style="${sawAdv.edgeTrimOn ? '' : 'display:none'}">
-                    <input id="trim-top" type="number" min="0" step="0.1" value="" placeholder="${he ? 'חיתוך מלמעלה (ס״מ)' : 'Cut from Top (cm)'}" />
-                    <input id="trim-bottom" type="number" min="0" step="0.1" value="" placeholder="${he ? 'חיתוך מלמטה (ס״מ)' : 'Cut from Bottom (cm)'}" />
-                    <input id="trim-right" type="number" min="0" step="0.1" value="" placeholder="${he ? 'חיתוך מצד ימין (ס״מ)' : 'Cut from Right (cm)'}" />
-                    <input id="trim-left" type="number" min="0" step="0.1" value="" placeholder="${he ? 'חיתוך מצד שמאל (ס״מ)' : 'Cut from Left (cm)'}" />
-            </div>
-            <hr style="border:none;border-top:1px solid #eee;margin:8px 0" />
-                        <div class="row">
                             <span>${he ? 'תגית' : 'Tag'} <span class="lock" aria-hidden="true">🔒</span></span>
                             <span id="tag-switch" class="switch" data-on="${sawAdv.tagOn ? 1 : 0}"><span class="knob"></span></span>
                         </div>
@@ -2671,7 +2684,7 @@ try {
         const onDoc = (e) => { if (!pop.contains(e.target) && e.target !== btn) { document.removeEventListener('click', onDoc, true); closePopover(); } };
         document.addEventListener('click', onDoc, true);
     // איפוס שדות בכל פתיחה
-    ['trim-top','trim-bottom','trim-left','trim-right'].forEach(id=>{ const el=pop.querySelector('#'+id); if (el) el.value=''; });
+    // no edge trim fields
     const kerfEl = pop.querySelector('#kerf-input');
     if (kerfEl) {
         let savedMM = Number(loadData('kerfMM'));
@@ -2684,21 +2697,7 @@ try {
             inputMain.value = ev.target.value;
             try { inputMain.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
         });
-        pop.querySelector('#edge-switch')?.addEventListener('click', () => {
-            sawAdv.edgeTrimOn = !sawAdv.edgeTrimOn; saveData('sawAdv', sawAdv);
-            const f = pop.querySelector('#edge-fields'); if (f) f.style.display = sawAdv.edgeTrimOn ? '' : 'none';
-            const sw = pop.querySelector('#edge-switch'); if (sw) sw.setAttribute('data-on', sawAdv.edgeTrimOn ? '1' : '0');
-            const reqs = gatherRequirements(); if (Array.isArray(reqs) && reqs.length) { const res = computeOptimization(); renderResults(res); }
-        });
-    ['trim-top','trim-bottom','trim-left','trim-right'].forEach(id => {
-            pop.querySelector('#' + id)?.addEventListener('change', (ev) => {
-                const v = Number(ev.target.value || 0);
-                const key = 'trim' + id.replace('trim-', '').replace(/^[a-z]/, c => c.toUpperCase());
-                sawAdv[key] = isFinite(v) ? v : 0;
-                saveData('sawAdv', sawAdv);
-                const reqs = gatherRequirements(); if (Array.isArray(reqs) && reqs.length) { const res = computeOptimization(); renderResults(res); }
-            });
-        });
+    // edge trim controls removed
         pop.querySelector('#tag-switch')?.addEventListener('click', () => {
             sawAdv.tagOn = !sawAdv.tagOn; saveData('sawAdv', sawAdv);
             const sw = pop.querySelector('#tag-switch'); if (sw) sw.setAttribute('data-on', sawAdv.tagOn ? '1' : '0');

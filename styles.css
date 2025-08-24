@@ -284,12 +284,30 @@ html[dir="ltr"] .loader-text{font-family:'Josefin Sans Variable', 'Rubik', syste
 	.plan-card:hover .thumb:not(.no-hover) .thumb-img.secondary{opacity:1; transform:translateX(0)}
 	.plan-card:hover .thumb:not(.no-hover) .thumb-img.primary{opacity:0; transform:translateX(0)}
 }
-.plan-card .body{padding:10px 12px}
+.plan-card .body{padding:8px 10px}
 .plan-card h3{margin:0 0 6px;font-size:18px}
-.plan-card p{margin:0 0 10px;color:var(--muted)}
+.plan-card p{margin:0 0 8px;color:var(--muted)}
 .plan-card .price{font-weight:700;margin-bottom:10px}
-.plan-card .card-actions{margin-top:auto; padding:0 12px 14px; display:flex; justify-content:center}
+.plan-card .card-actions{margin-top:auto; padding:0 10px 12px; display:flex; justify-content:center}
 .plan-card .card-actions .btn{font-size:16px; padding:10px 14px; min-width:54%; border-radius:12px}
+/* Articles list: 2 per row, square cards, hover effect; compact read button */
+#articles-grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px}
+@media(max-width:700px){ #articles-grid{ grid-template-columns:1fr } }
+#articles-grid .plan-card{ border-radius:0; transition:box-shadow .2s ease, transform .12s ease }
+#articles-grid .plan-card .thumb, #articles-grid .plan-card .thumb-img{ border-radius:0 }
+#articles-grid .plan-card .thumb{ height:150px; aspect-ratio:auto }
+#articles-grid .plan-card .thumb-img{ width:100%; height:100%; object-fit:cover }
+@media(max-width:700px){ #articles-grid .plan-card .thumb{ height:120px } }
+#articles-grid .plan-card:hover{ transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.08) }
+#articles-grid .card-actions .btn{ text-decoration:none; min-width:auto; padding:6px 12px; display:inline-flex; align-items:center; justify-content:center }
+#articles-grid .card-actions .btn:hover{ text-decoration:none }
+
+/* Articles (detail page) — single column, 80% width, no hero image */
+.article{ display:block; max-width:80%; margin:0 auto }
+@media(max-width:900px){ .article{ max-width:92% } }
+.article .article-hero{ display:none }
+.article .article-body{ line-height:1.65 }
+.article .article-body p{ margin:0 0 1em }
 /* About */
 .about-wrap{display:grid;grid-template-columns:1.2fr 1fr;grid-template-areas:"text photo";gap:16px;align-items:stretch; min-height:60vh; width:100%; max-width:none; margin:0}
 .container > .card.about-wrap{padding-left:clamp(24px, 8vw, 88px); padding-right:clamp(24px, 8vw, 88px)}
