@@ -1,94 +1,86 @@
 document.addEventListener('DOMContentLoaded', () => {
-// הגדרות ראשוניות
-let language = loadData('lang') || 'he';
-if (typeof language !== 'string') language = 'he';
-let currency = loadData('currency') || 'EUR';
-if (typeof currency !== 'string') currency = 'EUR';
-let unitSystem = loadData('unitSystem') || 'metric';
-if (typeof unitSystem !== 'string') unitSystem = 'metric';
-// מאגר עצים טעון מהקובץ
-let inventoryRows = loadData('inventoryRows') || [];
-let inventoryHeaders = loadData('inventoryHeaders') || [];
-let inventoryUnits = loadData('inventoryUnits') || [];
-let inventoryData = loadData('inventoryData') || [];
-let showNewInventoryRow = false;
-let editingRows = new Set();
-let inventoryPriceCurrencyUnit = loadData('inventoryPriceCurrencyUnit') || '';
-// העדפות תצוגה (שמורות בדפדפן)
-let displaySettings = loadData('displaySettings') || { colorPieces: true, fontWeight: 'regular', showPieceLabels: true, showTags: true, panelOpen: false, displayUnit: undefined };
-// Saw-popover advanced settings
-let sawAdv = loadData('sawAdv') || { tagOn:false };
-// ודא מפתחות ברירת מחדל
-displaySettings = {
-    colorPieces: displaySettings.colorPieces !== false,
-    fontWeight: displaySettings.fontWeight === 'bold' ? 'bold' : 'regular',
-    showPieceLabels: displaySettings.showPieceLabels !== false,
-    panelOpen: !!displaySettings.panelOpen,
-    showTags: displaySettings.showTags !== false,
-    // ברירת מחדל: מטרי -> ס"מ, אימפריאלי -> אינץ'
-    displayUnit: (function(){
-        if (displaySettings && typeof displaySettings.displayUnit === 'string') return displaySettings.displayUnit;
-        return (unitSystem === 'imperial') ? 'in' : 'cm';
-    })()
-};
-// normalize sawAdv
-sawAdv = { tagOn: !!(sawAdv && sawAdv.tagOn) };
-// מזהה ייחודי לדיאגרמות SVG כדי למנוע התנגשויות id בין דיאגרמות שונות
-let svgIdCounter = 0;
-// Global helper: quick text width approximation used by SVG label fit checks
-const approxTextWidthPlate = (txt, fs) => (String(txt||'').length * fs * 0.6);
-// מילון תרגומים
-const translations = {
-    he: {
-        title: 'אופטימיזציית חיתוך עץ',
-        reqs: 'דרישות פרויקט',
-    db: 'מלאי',
-        results: 'תוצאות',
-        addReq: 'הוסף דרישה',
-        calcOpt: 'חשב אופטימיזציה',
-    showDb: 'הצג מלאי',
-    loadFile: 'טען קובץ (.xlsx, .xls, .csv)',
-    addTree: 'הוסף פריט',
-        exportPdf: 'סכם בקובץ PDF',
-        noResults: 'אין תוצאות עדיין. לחץ "חשב אופטימיזציה" כדי להתחיל.',
-        projectName: 'שם הפרויקט',
-        sawThickness: 'עובי מסור',
-        displaySettings: 'הגדרות תצוגה',
-        displaySettingsTitle: 'שינוי הגדרות תצוגה:',
-        cutColors: 'צבע חיתוכים',
-    fontSize: 'גופן',
-        regular: 'רגיל',
-        bold: 'בולט',
-        extraInfo: 'מידע נוסף',
-    tags: 'תגיות',
-        save: 'שמור'
-    },
-    en: {
-        title: 'Wood Cutting Optimization',
-        reqs: 'Project Requirements',
-    db: 'Inventory',
-        results: 'Results',
-        addReq: 'Add Requirement',
-        calcOpt: 'Compute Optimization',
-        showDb: 'Show Inventory',
-    loadFile: 'Load file (.xlsx, .xls, .csv)',
-    addTree: 'Add item',
-        exportPdf: 'Export PDF',
-        noResults: 'No results yet. Click "Compute Optimization" to start.',
-        projectName: 'Project Name',
-        sawThickness: 'Saw Kerf',
-        displaySettings: 'Display Settings',
-        displaySettingsTitle: 'Change display settings:',
-        cutColors: 'Cut colors',
-    fontSize: 'Font',
-        regular: 'Regular',
-        bold: 'Bold',
-        extraInfo: 'Extra info',
-    tags: 'Tags',
-    save: 'save',
-    ok: 'OK'
-    }
-};
+    // Core state from storage (with safe fallbacks)
+    let language = loadData('lang') || 'he';
+    let unitSystem = loadData('unitSystem') || 'metric';
+    let currency = loadData('currencySymbol') || '€';
+    let inventoryRows = loadData('inventoryRows') || [];
+    let inventoryHeaders = loadData('inventoryHeaders') || [];
+    let inventoryUnits = loadData('inventoryUnits') || [];
+    let inventoryData = loadData('inventoryData') || [];
+    let inventoryPriceCurrencyUnit = loadData('inventoryPriceCurrencyUnit') || currency;
+
+    // Minimal translations used across the UI
+    const translations = {
+        he: {
+            showDb: 'הצג מלאי',
+            save: 'שמור',
+            ok: 'אישור',
+            extraInfo: 'מידע נוסף',
+            tags: 'תגיות',
+            fontSize: 'גודל גופן',
+            regular: 'רגיל',
+            bold: 'בולט',
+            displaySettingsTitle: 'הגדרות תצוגה',
+            compressedView: 'תצוגה מצומצמת'
+        },
+        en: {
+            showDb: 'Show Inventory',
+            save: 'save',
+            ok: 'OK',
+            extraInfo: 'Extra info',
+            tags: 'Tags',
+            fontSize: 'Font size',
+            regular: 'Regular',
+            bold: 'Bold',
+            displaySettingsTitle: 'Display settings',
+            compressedView: 'Compressed view'
+        }
+    };
+
+    // Advanced saw settings (persisted) with safe defaults
+    let sawAdv = Object.assign({
+        // Block 1 defaults: all sliders OFF
+        orientationLock: false,
+        orientationPref: 'horizontal', // 'horizontal' | 'vertical'
+        edgeTrimOn: false,
+        edgeTrimTopCm: 0,
+        edgeTrimBottomCm: 0,
+        edgeTrimLeftCm: 0,
+        edgeTrimRightCm: 0,
+        sawCuttingOn: false,
+        tagOn: false
+    }, loadData('sawAdv') || {});
+
+    // One-time migration: ensure saw cutting starts OFF visibly for all users
+    try {
+        const migrated = loadData('sawCutDefaultReset_v1');
+        if (!migrated) {
+            sawAdv.sawCuttingOn = false;
+            saveData('sawAdv', sawAdv);
+            saveData('sawCutDefaultReset_v1', true);
+        }
+    } catch(_){}
+
+    // Display/results settings (persisted) with defaults
+    let displaySettings = Object.assign({
+        panelOpen: false,
+        // Block 3 defaults: show extra info (labels) and cuts color ON; others OFF
+        showPieceLabels: true,
+        colorPieces: true,
+        fontWeight: 'regular', // 'regular' | 'bold'
+        fontSize: 'normal', // 'small' | 'normal' | 'large'
+        displayUnit: 'cm',     // 'cm' | 'mm' | 'm' | for imperial code uses global unitSystem
+        showTags: false,
+        cutOrderOn: false,
+        compressedView: false
+    }, loadData('displaySettings') || {});
+
+    // UI state for inventory editing/new row
+    let showNewInventoryRow = false;
+    let editingRows = new Set();
+
+    // Unique IDs for SVG diagrams
+    let svgIdCounter = 1;
 
 // Results table column visibility settings (persisted)
 let resultsColSettings = loadData('resultsColSettings') || {
@@ -840,7 +832,7 @@ function loadData(key) {
 // כאן ייכנסו האלגוריתמים של 1D ו-2D + שרטוט SVG בעתיד
 // =========================================
 // אופטימיזציית קורות 1D (גרידי, בחירת אורך מיטבי בודד)
-function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
+function planBeamsForGroup(groupKey, cutsInput, kerfMM) {
     // groupKey: { type, thickness, width }
     // בחר את אורך הקורה מהמלאי שיניב עלות מינימלית הכוללת
         const tIdx = getTypeColIndex(); // Get the index for the type column
@@ -865,7 +857,9 @@ function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
     if (stockOptions.length === 0) return null;
     // פונקציה לגרידי: לוקחת אורך נתון ומקצה חיתוכים
     function greedyPack(Lmm) {
-        const remainingCuts = [...cutsMM].sort((a,b)=>b-a);
+        // cuts may be numbers (legacy) or objects {len, tag}
+        const toObj = (c) => (typeof c === 'number') ? { len: c, tag: '' } : { len: Number(c.len)||0, tag: String(c.tag||'') };
+        const remainingCuts = [...cutsInput].map(toObj).sort((a,b)=>b.len-a.len);
         const bars = [];
         while (remainingCuts.length) {
             let bar = { used:0, pieces:[], waste:0 };
@@ -876,19 +870,19 @@ function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
                 let placed = false;
                 // כלל מיוחד: אם נותר אורך בדיוק בגודל חתיכה מבוקשת — חתוך ללא kerf וסיים את הקורה
                 const tol = 1e-6;
-                let exactIdx = remainingCuts.findIndex(p => Math.abs(p - remaining) <= tol);
+                let exactIdx = remainingCuts.findIndex(p => Math.abs(p.len - remaining) <= tol);
                 // Forbid exact-from-remainder for pieces strictly between 87–90 cm (user constraint example)
                 if (exactIdx >= 0) {
-                    const pExact = remainingCuts[exactIdx];
+                    const pExact = remainingCuts[exactIdx].len;
                     if (pExact > 870 && pExact < 900) {
                         exactIdx = -1; // disallow this special case; must move to a new bar
                     }
                 }
                 if (exactIdx >= 0) {
                     const piece = remainingCuts[exactIdx];
-                    bar.pieces.push(piece);
-                    bar.used += piece; // ללא kerf עבור חתיכה אחרונה המדויקת
-                    remaining -= piece;
+                    bar.pieces.push(piece); // {len, tag}
+                    bar.used += piece.len; // ללא kerf עבור חתיכה אחרונה המדויקת
+                    remaining -= piece.len;
                     remainingCuts.splice(exactIdx,1);
                     placed = true;
                     anyPlacedThisBar = true;
@@ -898,10 +892,10 @@ function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
                 for (let idx = 0; idx < remainingCuts.length; idx++) {
                     const piece = remainingCuts[idx];
                     // kerf לכל חתיכה שנחתכת מהקורה (כולל הראשונה, אבל לא נדרשת עבור האחרונה אם היא שווה בדיוק לשארית)
-                    const need = piece + kerfMM;
+                    const need = piece.len + kerfMM;
                     if (need <= remaining + 1e-6) {
                         // שים חתיכה
-                        bar.pieces.push(piece);
+                        bar.pieces.push(piece); // {len, tag}
                         bar.used += need;
                         remaining -= need;
                         remainingCuts.splice(idx,1);
@@ -922,10 +916,10 @@ function planBeamsForGroup(groupKey, cutsMM, kerfMM) {
     // הערך הטוב ביותר בין אופציות ארוך מלאי שונות
     let best = null;
     for (const opt of stockOptions) {
-        const bars = greedyPack(opt.Lmm);
+    const bars = greedyPack(opt.Lmm);
         // דלג אם לא כל החתיכות שובצו (מגן מפני מצב בו אף חתיכה לא נכנסת)
-        const placedCount = bars.reduce((a,b)=> a + b.pieces.length, 0);
-        if (placedCount < cutsMM.length) continue;
+    const placedCount = bars.reduce((a,b)=> a + b.pieces.length, 0);
+    if (placedCount < cutsInput.length) continue;
         const totalCost = bars.length * opt.price;
         if (!best || totalCost < best.totalCost) {
             best = { option: opt, bars, totalCost };
@@ -1544,7 +1538,7 @@ function computeOptimization() {
     const lUnit = inventoryUnits[lIdx] || '';
 
     // Group requirements into Beams (1D) and Plates (2D)
-    const groupsBeams = new Map(); // {type,thickness,width} => lengths(mm)
+    const groupsBeams = new Map(); // {type,thickness,width} => cuts array (number mm or {len:mm, tag})
     const groupsPlates = new Map(); // {type,thickness} => rects {w,h,tag}
     for (const r of reqs){
         const type = r.type;
@@ -1567,7 +1561,7 @@ function computeOptimization() {
             const key = JSON.stringify({type, thickness, width: String(widthVal)});
             if (!groupsBeams.has(key)) groupsBeams.set(key, []);
             const list = groupsBeams.get(key);
-            for (let i=0;i<(r.qty||1);i++) list.push(lReqMM);
+            for (let i=0;i<(r.qty||1);i++) list.push({ len: lReqMM, tag: r.tag || '' });
         }
     }
 
@@ -1585,7 +1579,9 @@ function computeOptimization() {
         totalBaseCost += (plan.option.price || 0) * plan.bars.length;
         const lenDispFromMM = (mm)=> unitSystem==='imperial' ? (mm/25.4) : (mm/1000);
         for (const bar of plan.bars){
-            const cutsDisp = bar.pieces.map(p => unitSystem==='imperial' ? (p/25.4) : (p/10));
+            // bar.pieces are objects {len, tag}
+            const cutsDisp = bar.pieces.map(p => unitSystem==='imperial' ? (p.len/25.4) : (p.len/10));
+            const tags = bar.pieces.map(p => String(p.tag||''));
             const wasteDisp = unitSystem==='imperial' ? (bar.waste/25.4) : (bar.waste/10);
             const wastePct = plan.option.Lmm>0 ? (bar.waste/plan.option.Lmm)*100 : 0;
             beamsResult.push({
@@ -1598,73 +1594,97 @@ function computeOptimization() {
                 priceBase: plan.option.price || 0,
                 supplier: plan.option.supplier || '',
                 cutsDisp,
+                tags,
                 wasteDisp,
                 wastePct,
                 kerfMM: kerfMMConst
             });
         }
     }
-    // Solve Plates
+    // Solve Plates via new guillotine optimizer
     const platesResult = [];
-    for (const [keyStr, rects] of groupsPlates.entries()){
-        const key = JSON.parse(keyStr);
-        try {
-            const tIdxV = getTypeColIndex();
-            const thIdxV = getThicknessColIndex();
-            const wIdxV = getWidthColIndex();
-            const lenIdxV = getLengthColIndex();
-            const wUnitV = inventoryUnits[wIdxV] || '';
-            const lUnitV = inventoryUnits[lenIdxV] || '';
-            const cands = (inventoryData||[])
-                .map((row,i)=>({row,i}))
-                .filter(({row}) => String(row[tIdxV])===key.type && String(row[thIdxV])===key.thickness && classificationIsPlate(getClassificationFor(String(row[tIdxV]), String(row[thIdxV]))))
-                .map(({row})=>({Wmm:toMM(row[wIdxV], wUnitV), Hmm:toMM(row[lenIdxV], lUnitV)}))
-                .filter(p=>isFinite(p.Wmm)&&isFinite(p.Hmm)&&p.Wmm>0&&p.Hmm>0);
-            for (const part of rects){
-                const fits = cands.some(p => (part.w<=p.Wmm && part.h<=p.Hmm) || (part.h<=p.Wmm && part.w<=p.Hmm));
-                if (!fits){
-                    const inchSym='″';
-                    const wDisp = unitSystem==='imperial' ? `${formatSmart(part.w/25.4)}${inchSym}` : `${formatSmart(part.w/10)}${language==='he'?' ס״מ':' cm'}`;
-                    const hDisp = unitSystem==='imperial' ? `${formatSmart(part.h/25.4)}${inchSym}` : `${formatSmart(part.h/10)}${language==='he'?' ס״מ':' cm'}`;
-                    errors.push(language==='he' ? `חלק (${key.type}, עובי ${key.thickness}) גדול מדי: ${wDisp}×${hDisp} לא נכנס בשום פלטה` : `Plate part (${key.type}, thickness ${key.thickness}) too large: ${wDisp}×${hDisp}`);
-                    break;
-                }
-            }
-        } catch(_){ }
-        const pack = packPlatesForGroup(key, rects, kerfMMConst);
-        if (!pack || !pack.used || !pack.used.length) continue;
-        for (const used of pack.used){
-            totalBaseCost += (used.plate.price || 0) * (used.layouts?.length||0);
-            for (const layout of used.layouts){
-                const cutsDisp = layout.placed.map(p=>{
-                    const a = unitSystem==='imperial' ? (p.w/25.4) : (p.w/10);
-                    const b = unitSystem==='imperial' ? (p.h/25.4) : (p.h/10);
-                    return `${formatSmart(a)}×${formatSmart(b)}`;
-                });
-                const plateArea = used.plate.Wmm * used.plate.Hmm;
-                const wasteArea = (layout.freeRects||[]).reduce((s,r)=> s + Math.max(0,r.w)*Math.max(0,r.h), 0);
-                const wastePct = plateArea>0 ? (wasteArea/plateArea)*100 : 0;
-                platesResult.push({
+    try {
+        // Build userReqs for plates only from groupsPlates
+        const userReqs = [];
+        for (const [keyStr, rects] of groupsPlates.entries()){
+            const key = JSON.parse(keyStr);
+            for (const r of rects){
+                userReqs.push({
+                    material: '',
                     type: key.type,
-                    classification: language==='he'?'פלטה':'Plate',
                     thickness: key.thickness,
-                    width: fromMM(used.plate.Wmm, wUnit),
-                    length: fromMM(used.plate.Hmm, lUnit),
-                    priceBase: used.plate.price,
-                    supplier: used.plate.supplier || '',
-                    material: used.plate.material || '',
-                    cutsDisp,
-                    wasteAreaM2: (wasteArea/1_000_000),
-                    wastePct,
-                    plateWmm: used.plate.Wmm,
-                    plateHmm: used.plate.Hmm,
-                    kerfMM: kerfMMConst,
-                    placed: layout.placed.map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,srcW:p.src.w,srcH:p.src.h, tag: p.src.tag})),
-                    freeRects: (layout.freeRects||[]).map(fr=>({x:fr.x,y:fr.y,w:fr.w,h:fr.h}))
+                    width: unitSystem==='imperial' ? (r.w/25.4) : r.w, // inches or mm
+                    height: unitSystem==='imperial' ? (r.h/25.4) : r.h,
+                    qty: 1
                 });
             }
         }
-    }
+        // Build plateDB from inventory rows (only classification===Plate)
+        const tIdxV = getTypeColIndex();
+        const thIdxV = getThicknessColIndex();
+        const wIdxV = getWidthColIndex();
+        const lIdxV = getLengthColIndex();
+        const priceIdxV = getPriceColIndex();
+        const supplierIdxV = getSupplierColIndex();
+        const matIdxV = getMaterialColIndex();
+        const wUnitV = inventoryUnits[wIdxV] || '';
+        const lUnitV = inventoryUnits[lIdxV] || '';
+        const plateDB = (inventoryData||[]).map(row=>({
+            חומר: String(row[matIdxV]||''),
+            סוג: String(row[tIdxV]||''),
+            סיווג: String(getClassificationFor(String(row[tIdxV]), String(row[thIdxV]))||''),
+            עובי: Number(row[thIdxV]),
+            רוחב: fromMM(toMM(row[wIdxV], wUnitV), unitSystem==='imperial'?'inch':'mm'),
+            אורך: fromMM(toMM(row[lIdxV], lUnitV), unitSystem==='imperial'?'inch':'mm'),
+            מחיר: parseFloat(String(row[priceIdxV] ?? '').replace(/[^0-9.\-]/g,'')) || 0,
+            ספק: String(row[supplierIdxV]||'')
+        }));
+        const paramsG = {
+            kerf: Number(document.getElementById('kerf')?.value || kerfMMConst),
+            displayKerfMin: 15,
+            units: unitSystem==='imperial' ? 'inch' : 'mm',
+            showCutOrder: !!displaySettings.cutOrderOn
+        };
+        if (typeof optimizeCuttingAllGroups === 'function'){
+            const groupsOut = optimizeCuttingAllGroups(userReqs, plateDB, paramsG) || [];
+            // Map to existing platesResult items for rendering
+            for (const g of groupsOut){
+                if (!g || !g.cutPlan) continue;
+                for (const pl of g.cutPlan){
+                    totalBaseCost += Number(pl.platePrice)||0;
+                    // produce a cutsDisp array of WxH strings
+                    const cutsDisp = (pl.parts||[]).map(p=>{
+                        const a = unitSystem==='imperial' ? p.w : (p.w/10);
+                        const b = unitSystem==='imperial' ? p.h : (p.h/10);
+                        return `${formatSmart(a)}×${formatSmart(b)}`;
+                    });
+                    const Wmm = unitSystem==='imperial' ? (Number(pl.plateWidth)*25.4) : (Number(pl.plateWidth)*1);
+                    const Hmm = unitSystem==='imperial' ? (Number(pl.plateHeight)*25.4) : (Number(pl.plateHeight)*1);
+                    platesResult.push({
+                        type: pl.plateType,
+                        classification: language==='he'?'פלטה':'Plate',
+                        thickness: pl.thickness,
+                        width: Number(pl.plateWidth),
+                        length: Number(pl.plateHeight),
+                        priceBase: Number(pl.platePrice)||0,
+                        supplier: pl.supplier || '',
+                        material: pl.material || '',
+                        cutsDisp,
+                        wasteAreaM2: 0,
+                        wastePct: Number(pl.wastePercent)||0,
+                        plateWmm: Wmm,
+                        plateHmm: Hmm,
+                        kerfMM: kerfMMConst,
+                        placed: (pl.parts||[]).map(p=>({x:p.x,y:p.y,w:p.w,h:p.h,srcW:p.w,srcH:p.h, tag: p.tag || ''})),
+                        freeRects: (pl.wasteRects||[]).map(fr=>({x:fr.x,y:fr.y,w:fr.w,h:fr.h})),
+                        svg: pl.svg
+                    });
+                }
+            }
+        } else {
+            console.warn('optimizeCuttingAllGroups not found');
+        }
+    } catch(e){ console.error('Plate optimization failed', e); }
 
     // מס' מוצרים אפשריים — חישוב קונסרבטיבי מדויק יותר
     // beams: כמה סטים של כל דרישות הקבוצה נכנסים ברכישות שבוצעו
@@ -1673,18 +1693,19 @@ function computeOptimization() {
         const key = JSON.parse(keyStr);
         const plan = planBeamsForGroup(key, cuts, kerfMMConst);
         if (!plan) { maxProducts = 0; continue; }
+        const cutsMM = cuts.map(c => typeof c === 'number' ? c : Number(c.len)||0).filter(v=>isFinite(v)&&v>0);
         // אם כל החתיכות שוות — חשב כושר לקורה אחת: floor((L+kerf)/(p+kerf))
-        const allEqual = cuts.every(v => Math.abs(v - cuts[0]) < 1e-6);
-        if (allEqual && cuts.length > 0) {
-            const p = cuts[0];
+        const allEqual = cutsMM.every(v => Math.abs(v - cutsMM[0]) < 1e-6);
+        if (allEqual && cutsMM.length > 0) {
+            const p = cutsMM[0];
             const perBar = Math.floor((plan.option.Lmm + kerfMMConst) / (p + kerfMMConst));
             const totalPiecesPossible = perBar * plan.bars.length;
-            const neededPerProduct = cuts.length; // סט אחד = כמות הדרישות (כי allEqual מייצג את הסט)
+            const neededPerProduct = cutsMM.length; // סט אחד = כמות הדרישות (כי allEqual מייצג את הסט)
             const possible = neededPerProduct > 0 ? Math.floor(totalPiecesPossible / neededPerProduct) : 0;
             maxProducts = Math.min(maxProducts, Math.max(1, possible));
         } else {
             // ברירת מחדל: יחס אורכים שמרני כולל kerf בין חלקים בסט
-            const perSet = cuts.reduce((a,b)=> a + b, 0) + Math.max(0, cuts.length-1) * kerfMMConst;
+            const perSet = cutsMM.reduce((a,b)=> a + b, 0) + Math.max(0, cutsMM.length-1) * kerfMMConst;
             const totalAvailable = plan.bars.length * plan.option.Lmm;
             const possible = perSet>0 ? Math.floor(totalAvailable / perSet) : 0;
             maxProducts = Math.min(maxProducts, Math.max(1, possible));
@@ -1724,7 +1745,7 @@ function renderResults(results) {
         const wU = inventoryUnits[wIdx] || '';
         const lU = inventoryUnits[lIdx] || '';
         const inchSym = '″';
-        const cutsHeader = language==='he' ? `חיתוכים (${unitSystem==='imperial'?inchSym:'ס״מ'})` : `Cuts (${unitSystem==='imperial'?inchSym:'cm'})`;
+    const cutsHeader = language==='he' ? `חיתוכים (${unitSystem==='imperial'?inchSym:'ס״מ'})` : `Cuts (${unitSystem==='imperial'?inchSym:'cm'})`;
         const wasteHeader = language==='he'
             ? (unitSystem==='imperial' ? `פחת (אינץ׳)` : `פחת (ס״מ)`)
             : (unitSystem==='imperial' ? `Waste (inch)` : `Waste (cm)`);
@@ -1876,6 +1897,12 @@ function renderResults(results) {
                     <option value="regular" ${displaySettings.fontWeight==='regular'?'selected':''}>${t.regular}</option>
                     <option value="bold" ${displaySettings.fontWeight==='bold'?'selected':''}>${t.bold}</option>
                 </select>`;
+            const fontSizeSel = `
+                <select id="ds-font-size" class="btn select">
+                    <option value="small" ${displaySettings.fontSize==='small'?'selected':''}>${language==='he'?'קטן':'Small'}</option>
+                    <option value="normal" ${displaySettings.fontSize==='normal'?'selected':''}>${language==='he'?'רגיל':'Normal'}</option>
+                    <option value="large" ${displaySettings.fontSize==='large'?'selected':''}>${language==='he'?'גדול':'Large'}</option>
+                </select>`;
             // יחידות תצוגה לדיאגרמות
             const unitOptions = (unitSystem==='imperial')
                 ? [{v:'in', l:(language==='he'?'אינץ׳':'inch')}]
@@ -1888,12 +1915,12 @@ function renderResults(results) {
             // Columns toggles (after display settings)
         const colToggles = `
                 <div class="res-cols" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap">
-                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'חומר':'Material'}</span><input type="checkbox" id="col-material" ${resultsColSettings.showMaterial?'checked':''} /></label>
-                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'סיווג':'Classification'}</span><input type="checkbox" id="col-classification" ${resultsColSettings.showClassification?'checked':''} /></label>
-                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'ספק':'Supplier'}</span><input type="checkbox" id="col-supplier" ${resultsColSettings.showSupplier?'checked':''} /></label>
-                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'פחת':'Waste'}</span><input type="checkbox" id="col-waste" ${resultsColSettings.showWasteValue?'checked':''} /></label>
-                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'פחת %':'Waste %'}</span><input type="checkbox" id="col-wastepct" ${resultsColSettings.showWastePct?'checked':''} /></label>
-            <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'מס׳ מוצרים אפשריים':'Max Products'} <span class="lock" aria-hidden="true">🔒</span></span><input type="checkbox" id="col-maxproducts" ${resultsColSettings.showMaxProducts?'checked':''} /></label>
+                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'חומר':'Material'}</span><input type="checkbox" id="col-material" ${resultsColSettings.showMaterial?'checked':''} style="transform:scale(1.5);" /></label>
+                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'סיווג':'Classification'}</span><input type="checkbox" id="col-classification" ${resultsColSettings.showClassification?'checked':''} style="transform:scale(1.5);" /></label>
+                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'ספק':'Supplier'}</span><input type="checkbox" id="col-supplier" ${resultsColSettings.showSupplier?'checked':''} style="transform:scale(1.5);" /></label>
+                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'פחת':'Waste'}</span><input type="checkbox" id="col-waste" ${resultsColSettings.showWasteValue?'checked':''} style="transform:scale(1.5);" /></label>
+                    <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'פחת %':'Waste %'}</span><input type="checkbox" id="col-wastepct" ${resultsColSettings.showWastePct?'checked':''} style="transform:scale(1.5);" /></label>
+            <label style="display:flex; align-items:center; gap:6px"><span>${language==='he'?'מס׳ מוצרים אפשריים 🔒':'Max Products 🔒'}</span><input type="checkbox" id="col-maxproducts" ${resultsColSettings.showMaxProducts?'checked':''} style="transform:scale(1.5);" /></label>
                 </div>`;
             return `
                 <div id="display-settings" style="margin:8px 0; display:flex; align-items:flex-start; gap:10px;">
@@ -1902,30 +1929,49 @@ function renderResults(results) {
                         <button id="res-print" class="btn" title="${language==='he'?'הדפס מיד':'Print now'}" style="font-size:18px; padding:8px 10px;">🖨️</button>
                     </div>
                     <div id="display-settings-panel" style="margin:8px auto 0; border:1px solid #ddd; padding:10px 12px; border-radius:10px; max-width:100%; background:#fff; display:${displaySettings.panelOpen?'flex':'none'}; gap:22px; align-items:center; justify-content:center; flex:1; flex-wrap:wrap;">
-                        <label style="display:flex; align-items:center; gap:10px;">
-                            <span>${t.extraInfo}</span>
+                        <!-- Extra info: keep text to the right of its slider in RTL via CSS order rules -->
+                        <label style="display:flex; align-items:center; gap:10px; flex-direction:row;">
                             <input type="checkbox" id="ds-labels" ${checked(displaySettings.showPieceLabels)} style="display:none;" />
-                            <span id="ds-labels-switch" role="switch" aria-checked="${displaySettings.showPieceLabels?'true':'false'}" tabindex="0" style="width:44px; height:24px; border-radius:12px; background:${displaySettings.showPieceLabels?'#4caf50':'#c7c7c7'}; position:relative; cursor:pointer; transition:background .2s; display:inline-block;">
-                                <span style="position:absolute; top:2px; ${displaySettings.showPieceLabels?'right:2px;':'left:2px;'} width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:all .2s;"></span>
+                            <span id="ds-labels-switch" class="switch" data-on="${displaySettings.showPieceLabels?1:0}" role="switch" aria-checked="${displaySettings.showPieceLabels?'true':'false'}" tabindex="0">
+                                <span class="knob"></span>
+                            </span>
+                            <span class="ds-text-extra">${t.extraInfo}</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:10px;">
+                            <span>${t.compressedView}</span>
+                            <input type="checkbox" id="ds-compressed" ${checked(displaySettings.compressedView)} style="display:none;" />
+                            <span id="ds-compressed-switch" class="switch" data-on="${displaySettings.compressedView?1:0}" role="switch" aria-checked="${displaySettings.compressedView?'true':'false'}" tabindex="0">
+                                <span class="knob"></span>
                             </span>
                         </label>
                         <label style="display:flex; align-items:center; gap:10px;">
-                            <span>${t.tags} <span class=\"lock\" aria-hidden=\"true\">🔒</span></span>
+                            <span>${language==='he'?'סדר חיתוכים':'Cut order'}</span>
+                            <input type="checkbox" id="ds-cutorder" ${checked(displaySettings.cutOrderOn)} style="display:none;" />
+                            <span id="ds-cutorder-switch" class="switch" data-on="${displaySettings.cutOrderOn?1:0}" role="switch" aria-checked="${displaySettings.cutOrderOn?'true':'false'}" tabindex="0">
+                                <span class="knob" style="color:${displaySettings.cutOrderOn ? '#000' : '#ccc'}; text-align:center; line-height:20px;">🔒</span>
+                            </span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:10px;">
+                            <span>${t.tags}</span>
                             <input type="checkbox" id="ds-tags" ${displaySettings.showTags?'checked':''} style="display:none;" />
-                            <span id="ds-tags-switch" role="switch" aria-checked="${displaySettings.showTags?'true':'false'}" tabindex="0" style="width:44px; height:24px; border-radius:12px; background:${displaySettings.showTags?'#4caf50':'#c7c7c7'}; position:relative; cursor:pointer; transition:background .2s; display:inline-block;">
-                                <span style="position:absolute; top:2px; ${displaySettings.showTags?'right:2px;':'left:2px;'} width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:all .2s;"></span>
+                            <span id="ds-tags-switch" class="switch" data-on="${displaySettings.showTags?1:0}" role="switch" aria-checked="${displaySettings.showTags?'true':'false'}" tabindex="0">
+                                <span class="knob" style="color:${displaySettings.showTags ? '#000' : '#ccc'}; text-align:center; line-height:20px;">🔒</span>
                             </span>
                         </label>
                         <label style="display:flex; align-items:center; gap:10px;">
-                            <span>${language==='he'?'חיתוכים':'Cuts color'}</span>
+                            <span>${language==='he'?'צבע חיתוכים':'Cuts color'}</span>
                             <input type="checkbox" id="ds-color" ${checked(displaySettings.colorPieces)} style="display:none;" />
-                            <span id="ds-color-switch" role="switch" aria-checked="${displaySettings.colorPieces?'true':'false'}" tabindex="0" style="width:44px; height:24px; border-radius:12px; background:${displaySettings.colorPieces?'#4caf50':'#c7c7c7'}; position:relative; cursor:pointer; transition:background .2s; display:inline-block;">
-                                <span style="position:absolute; top:2px; ${displaySettings.colorPieces?'right:2px;':'left:2px;'} width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:all .2s;"></span>
+                            <span id="ds-color-switch" class="switch" data-on="${displaySettings.colorPieces?1:0}" role="switch" aria-checked="${displaySettings.colorPieces?'true':'false'}" tabindex="0">
+                                <span class="knob"></span>
                             </span>
                         </label>
                         <label style="display:flex; align-items:center; gap:10px;">
                             <span>${t.fontSize}</span>
                             ${fontSel}
+                        </label>
+                        <label style="display:flex; align-items:center; gap:10px;">
+                            <span>${language==='he'?'גודל טקסט':'Text size'}</span>
+                            ${fontSizeSel}
                         </label>
                         <label style="display:flex; align-items:center; gap:10px;">
                             <span>${language==='he'?'יחידות תצוגה':'Diagram units'}</span>
@@ -1936,12 +1982,13 @@ function renderResults(results) {
                     </div>
                 </div>`;
         }
-        const parts = [];
-        let idx = 1;
-        // הוסף את הפאנל לפני הדיאגרמות
-        parts.push(settingsPanel());
+    // We build diagrams separately from the settings panel so compressed view doesn't shrink the panel
+    let idx = 1;
+    const settingsHtml = settingsPanel();
+    const beamItems = [];
+    const beamSections = [];
     // beams diagrams
-        for (const r of results.beams) {
+    for (const r of results.beams) {
             const thIdx = getThicknessColIndex();
             const wIdx = getWidthColIndex();
             const thU = inventoryUnits[thIdx] || '';
@@ -1963,10 +2010,15 @@ function renderResults(results) {
                     : `Item ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(wMM)} mm*mm , ${formatSmart(lenM)} m`;
             }
             const h3Dir = (language==='he') ? ' dir="rtl"' : '';
-            parts.push(`<div class="results-section"><h3 class="item-title"${h3Dir}>${title}</h3>${beamSvg(r)}</div>`);
+            // Save both a standalone section and a compact pairable item
+            const singleSection = `<div class="results-section"><h3 class="item-title"${h3Dir}>${title}</h3>${beamSvg(r)}</div>`;
+            const pairItem = `<div class="pair-item"><h4 class="item-title"${h3Dir} style="margin:4px 0 6px; font-size:14px;">${title}</h4>${beamSvg(r)}</div>`;
+            beamSections.push(singleSection);
+            beamItems.push(pairItem);
             idx++;
         }
         // plates diagrams
+        const plateSections = [];
         for (const r of (results.plates||[])) {
             const thIdx = getThicknessColIndex();
             const thU = inventoryUnits[thIdx] || '';
@@ -1986,10 +2038,37 @@ function renderResults(results) {
                     : `Item ${idx} — ${r.type} ${formatSmart(thMM)}×${formatSmart(Wmm)}×${formatSmart(Hmm)} mm`;
             }
             const h3Dir = (language==='he') ? ' dir="rtl"' : '';
-            parts.push(`<div class="results-section"><h3 class="item-title"${h3Dir}>${title}</h3>${plateSvg(r)}</div>`);
+            plateSections.push(`<div class="results-section"><h3 class="item-title"${h3Dir}>${title}</h3>${plateSvg(r)}</div>`);
             idx++;
         }
-        return parts.join('');
+        // When compressed: pair two beam diagrams into one section; plates remain one per section.
+        if (displaySettings.compressedView) {
+            const paired = [];
+            for (let i = 0; i < beamItems.length; i += 2) {
+                const a = beamItems[i];
+                const b = beamItems[i+1] || '';
+                // Responsive 2-up layout that stacks on narrow screens
+                paired.push(
+                    `<div class="results-section">
+                        <div class="beam-pair" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; align-items:start;">
+                            ${a}${b}
+                        </div>
+                    </div>`
+                );
+            }
+            // Compose final HTML: settings panel first (full width), then paired beams, then plates
+            return [
+                settingsHtml,
+                ...paired,
+                ...plateSections
+            ].join('');
+        }
+        // Non-compressed: settings panel followed by each beam/plate section as-is
+        return [
+            settingsHtml,
+            ...beamSections,
+            ...plateSections
+        ].join('');
     }
 
     function beamSvg(r) {
@@ -2015,7 +2094,7 @@ function renderResults(results) {
     // קיבוץ חתיכות זהות לצביעה
     // חתיכות: הוסבו קודם לס"מ (מטרי) או אינץ' (אימפריאלי) לתצוגה בטבלה.
     // לציור נדרש אותו בסיס יחידה של total: m באופציה מטרית, inch באימפריאלית.
-        const pieces = r.cutsDisp.map(v => {
+    const pieces = r.cutsDisp.map(v => {
             const val = Number(v);
             if (!isFinite(val)) return 0;
             if (unitSystem === 'imperial') return val; // כבר באינץ'
@@ -2050,7 +2129,12 @@ function renderResults(results) {
     const clamp = (v,min,max) => Math.min(max, Math.max(min, v));
     const baseFS = clamp(Math.round((Math.max(1, Math.round(40 * m))) * 0.35), 12, 20); // מבוסס על ברירת המחדל ~barH
     // אחוד גודל פונט: זהה לזה של מידות הפלטה (fsPlate=13)
-    const fsLarge = 13, fsMed = 13, fsSmall = 12;
+    let fsLarge = 13, fsMed = 13, fsSmall = 12;
+    if (displaySettings.fontSize === 'small') {
+        fsLarge = 11; fsMed = 11; fsSmall = 10;
+    } else if (displaySettings.fontSize === 'large') {
+        fsLarge = 15; fsMed = 15; fsSmall = 14;
+    }
     // גופן זהה לטבלאות
     const fontFamily = (language==='he')
         ? "'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial"
@@ -2065,8 +2149,8 @@ function renderResults(results) {
             // Align piece rectangles exactly with the beam bar (top and height)
             const wMMvalPiece = toMM(r.width, inventoryUnits[getWidthColIndex()]||'');
             const lenMMvalPiece = unitSystem==='imperial' ? (pieces[i]*25.4*1000/39.37007874015748) : (pieces[i]*1000); // pieces in m or inch -> mm
-            const tagText = (sawAdv.tagOn && r.itemTag) ? String(r.itemTag) : '';
-            rects.push(`<rect data-piece="1" data-kind="beam-piece" data-w-mm="${wMMvalPiece}" data-len-mm="${lenMMvalPiece}" ${tagText?`data-tag="${String(tagText).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}`:''}" x="${x}" y="${barY}" width="${pw}" height="${barH}" fill="${fillColor}" stroke="#cfd4da" />`);
+            const tagText = (displaySettings.showTags && Array.isArray(r.tags)) ? String(r.tags[i]||'') : '';
+            rects.push(`<rect data-piece="1" data-kind="beam-piece" data-w-mm="${wMMvalPiece}" data-len-mm="${lenMMvalPiece}" ${tagText?`data-tag=\"${String(tagText).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}\"`:''} x="${x}" y="${barY}" width="${pw}" height="${barH}" fill="${fillColor}" stroke="#cfd4da" />`);
             // תוויות על כל חתיכה: אורך למעלה (אמצע) — מספר בלבד; תגית במרכז אם קיימת
             const toDispFromM = (mVal) => {
                 if (unitSystem==='imperial') return mVal*39.37007874015748; // inch
@@ -2103,7 +2187,7 @@ function renderResults(results) {
             if (displaySettings.showTags && tagText) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                 const cy = barY + barH/2;
-                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${centerX}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#222">${tagText}</text>`);
+                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${centerX}" y="${cy}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="middle" fill="#000">${tagText}</text>`);
             }
             // Advance x by piece width and draw kerf after the piece except after the last piece
             x += pw;
@@ -2192,7 +2276,9 @@ function renderResults(results) {
             ? "'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial"
             : "'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
         const fontFamilyAttr = `font-family="${fontFamily}"`;
-        const fsLarge = 13, fsMed = 13, fsSmall = 12;
+        const fsLarge = displaySettings.fontSize === 'small' ? 11 : displaySettings.fontSize === 'large' ? 15 : 13;
+        const fsMed = fsLarge;
+        const fsSmall = displaySettings.fontSize === 'small' ? 10 : displaySettings.fontSize === 'large' ? 14 : 12;
         const toDispFromMM = (mmVal) => {
             if (unitSystem==='imperial') return mmVal/25.4; // inch
             const u = displaySettings.displayUnit || 'cm';
@@ -2253,7 +2339,7 @@ function renderResults(results) {
                 const weightAttr = displaySettings.fontWeight==='bold' ? 'font-weight="700"' : '';
                 const cx = x + pw/2;
                 const cy = y + ph/2;
-                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="${fsSmall}" text-anchor="middle" dominant-baseline="middle" fill="#222">${String(r.placed[i].tag)}</text>`);
+                rects.push(`<text ${weightAttr} ${fontFamilyAttr} clip-path="url(#${clipId})" x="${cx}" y="${cy}" font-size="${fsMed}" text-anchor="middle" dominant-baseline="middle" fill="#000">${String(r.placed[i].tag)}</text>`);
             }
         }
         // Waste: recompute a partition of empty area via repeated maximal empty rectangles (keeps only relevant waste and spacing)
@@ -2310,7 +2396,7 @@ function renderResults(results) {
 
     const title1 = language==='he' ? 'חיתוכים' : 'Cuts';
     const title2 = language==='he' ? 'עלויות' : 'Costs';
-    const title3 = language==='he' ? 'עצים לרכישה' : 'Items to Purchase';
+    const title3 = language==='he' ? 'רשימת קניות' : 'Shopping List';
         area.innerHTML = `
             <div class="results-section"><h3 class="section-title">${title1}</h3><div class="x-scroll">${table1()}</div></div>
             <div class="results-section"><h3 class="section-title">${title2}</h3><div class="x-scroll">${table2()}</div></div>
@@ -2362,22 +2448,32 @@ function renderResults(results) {
     const dsColor = document.getElementById('ds-color');
     const dsColorSwitch = document.getElementById('ds-color-switch');
     const dsFont = document.getElementById('ds-font');
+    const dsFontSize = document.getElementById('ds-font-size');
     const dsUnit = document.getElementById('ds-unit');
     const dsLabels = document.getElementById('ds-labels');
     const dsLabelsSwitch = document.getElementById('ds-labels-switch');
     const dsTags = document.getElementById('ds-tags');
     const dsTagsSwitch = document.getElementById('ds-tags-switch');
+    const dsCutOrder = document.getElementById('ds-cutorder');
+    const dsCutOrderSwitch = document.getElementById('ds-cutorder-switch');
+    const dsCompressed = document.getElementById('ds-compressed');
+    const dsCompressedSwitch = document.getElementById('ds-compressed-switch');
     const resPrint = document.getElementById('res-print');
     const colMaxProducts = document.getElementById('col-maxproducts');
     const reRender = () => { const res2 = computeOptimization(); renderResults(res2); };
     if (dsColor) dsColor.addEventListener('change', () => { displaySettings.colorPieces = !!dsColor.checked; saveData('displaySettings', displaySettings); reRender(); });
     if (dsColorSwitch) dsColorSwitch.addEventListener('click', () => { displaySettings.colorPieces = !displaySettings.colorPieces; saveData('displaySettings', displaySettings); reRender(); });
     if (dsFont) dsFont.addEventListener('change', () => { displaySettings.fontWeight = dsFont.value==='bold'?'bold':'regular'; saveData('displaySettings', displaySettings); reRender(); });
+    if (dsFontSize) dsFontSize.addEventListener('change', () => { displaySettings.fontSize = dsFontSize.value; saveData('displaySettings', displaySettings); reRender(); });
     if (dsUnit) dsUnit.addEventListener('change', () => { displaySettings.displayUnit = dsUnit.value; saveData('displaySettings', displaySettings); reRender(); });
     if (dsLabels) dsLabels.addEventListener('change', () => { displaySettings.showPieceLabels = !!dsLabels.checked; saveData('displaySettings', displaySettings); reRender(); });
     if (dsLabelsSwitch) dsLabelsSwitch.addEventListener('click', () => { displaySettings.showPieceLabels = !displaySettings.showPieceLabels; saveData('displaySettings', displaySettings); reRender(); });
     if (dsTags) dsTags.addEventListener('change', () => { displaySettings.showTags = !!dsTags.checked; saveData('displaySettings', displaySettings); reRender(); });
     if (dsTagsSwitch) dsTagsSwitch.addEventListener('click', () => { displaySettings.showTags = !displaySettings.showTags; saveData('displaySettings', displaySettings); reRender(); });
+    if (dsCutOrder) dsCutOrder.addEventListener('change', () => { displaySettings.cutOrderOn = !!dsCutOrder.checked; saveData('displaySettings', displaySettings); reRender(); });
+    if (dsCutOrderSwitch) dsCutOrderSwitch.addEventListener('click', () => { displaySettings.cutOrderOn = !displaySettings.cutOrderOn; saveData('displaySettings', displaySettings); reRender(); });
+    if (dsCompressed) dsCompressed.addEventListener('change', () => { displaySettings.compressedView = !!dsCompressed.checked; saveData('displaySettings', displaySettings); reRender(); });
+    if (dsCompressedSwitch) dsCompressedSwitch.addEventListener('click', () => { displaySettings.compressedView = !displaySettings.compressedView; saveData('displaySettings', displaySettings); reRender(); });
     if (resPrint) resPrint.addEventListener('click', () => {
         try { window.__AUTO_PRINT_PDF__ = true; } catch(_){}
         try { document.getElementById('export-pdf')?.click(); } catch(_){}
@@ -2534,8 +2630,11 @@ function addRequirementRow() {
                 .concat(types.map(t => `<option value="${t}">${t}</option>`)).join('');
     const thIdx = getThicknessColIndex();
     const thUnit = thIdx >= 0 ? (inventoryUnits[thIdx] || '') : '';
+            const isRTL = (document.documentElement && document.documentElement.dir === 'rtl');
+            const materialSelectHtml = `<select data-field="material">${matOptions}</select>`;
+            const projectsBtnHtml = `<button class="btn icon-btn btn-projects" title="${language==='he'?'פרויקטים שמורים':'Saved projects'}" aria-pressed="false">📚</button>`;
             row.innerHTML = `
-            <select data-field="material">${matOptions}</select>
+            ${isRTL ? projectsBtnHtml + materialSelectHtml : materialSelectHtml + projectsBtnHtml}
             <select data-field="type">${typeOptions}</select>
             <select data-field="thickness" disabled>
         <option value="">${language === 'he' ? 'עובי (מ״מ)' : 'Thickness (mm)'}</option>
@@ -2545,7 +2644,7 @@ function addRequirementRow() {
             </select>
                 <input data-field="length" type="number" min="0" placeholder="${language === 'he' ? (unitSystem==='imperial'?'אורך (אינץ׳)':'אורך (ס״מ)') : (unitSystem==='imperial'?'Length (inch)':'Length (cm)')}" />
             <input data-field="qty" type="number" min="1" placeholder="${language === 'he' ? 'כמות' : 'Qty'}" />
-            ${sawAdv.tagOn?`<input data-field="tag" type="text" placeholder="${language==='he'?'תגית':'Tag'}" />`:''}
+            <input data-field="tag" type="text" placeholder="${language==='he'?'תגית':'Tag'}" />
             <button class="btn icon-btn btn-duplicate" title="${language==='he'?'שכפל':'Duplicate'}">⎘</button>
             <button class="btn small btn-remove" title="Remove">✖</button>
         `;
@@ -2566,11 +2665,91 @@ function addRequirementRow() {
         // wire clone buttons
         clone.querySelector('.btn-duplicate')?.addEventListener('click', (e2)=>{ e2.preventDefault(); e2.stopPropagation(); row.after(clone.cloneNode(true)); });
         clone.querySelector('.btn-remove')?.addEventListener('click', ()=>{ clone.remove(); try{updateReqEmptyState();}catch(_){}});
+        // wire project toggle on the clone
+        try { wireProjectToggle(clone); } catch(_){ }
         row.after(clone);
         try{ updateReqEmptyState(); }catch(_){ }
     });
     const removeBtn = row.querySelector('.btn-remove');
     if (removeBtn) removeBtn.addEventListener('click', () => { row.remove(); try { updateReqEmptyState(); } catch(_){} });
+    // Saved projects toggle: wrap select and icon together so the icon is to the RIGHT of the select in RTL
+    function wireProjectToggle(r) {
+        const projBtn = r.querySelector('.btn-projects');
+        if (!projBtn) return;
+        const matSel = r.querySelector('select[data-field="material"]');
+        const typeSel = r.querySelector('select[data-field="type"]');
+        const thSel = r.querySelector('select[data-field="thickness"]');
+        const wEl = r.querySelector('[data-field="width"]');
+        const lenEl = r.querySelector('input[data-field="length"]');
+        const makeProjectWrap = ()=>{
+            const savedProjects = (loadData('savedProjects')||[]);
+            const wrap = document.createElement('span');
+            wrap.className = 'project-wrap';
+            wrap.style.display = 'inline-flex';
+            wrap.style.alignItems = 'center';
+            wrap.style.gap = '6px';
+            projBtn.classList.add('icon-btn'); // keep icon size consistent
+            const sel = document.createElement('select');
+            sel.className = 'project-select';
+            sel.setAttribute('data-field','project');
+            const ph = document.createElement('option');
+            ph.value = '';
+            ph.textContent = language==='he' ? 'בחר פרויקט' : 'Select project';
+            sel.appendChild(ph);
+            try {
+                if (Array.isArray(savedProjects)) {
+                    savedProjects.forEach(p => {
+                        const name = (typeof p === 'string') ? p : (p && (p.name||p.title||''));
+                        if (!name) return;
+                        const opt = document.createElement('option');
+                        opt.value = name; opt.textContent = name; sel.appendChild(opt);
+                    });
+                }
+            } catch(_){ }
+            const isRTL = (document.documentElement && document.documentElement.dir === 'rtl');
+            // In RTL, first item appears on the RIGHT in flex-row, so place the icon first
+            if (isRTL) { wrap.appendChild(projBtn); wrap.appendChild(sel); }
+            else { wrap.appendChild(sel); wrap.appendChild(projBtn); }
+            return wrap;
+        };
+        const enterProjectMode = ()=>{
+            if (r.dataset.projectMode === '1') return;
+            r.dataset.projectMode = '1';
+            projBtn.setAttribute('aria-pressed','true');
+            // hide fields
+            if (matSel) matSel.style.display = 'none';
+            if (typeSel) typeSel.style.display = 'none';
+            if (thSel) thSel.style.display = 'none';
+            if (wEl) wEl.style.display = 'none';
+            if (lenEl) lenEl.style.display = 'none';
+            // insert wrapper (select + icon button) after material
+            const prjWrap = makeProjectWrap();
+            if (matSel && matSel.after) matSel.after(prjWrap);
+        };
+        const exitProjectMode = ()=>{
+            if (r.dataset.projectMode !== '1') return;
+            r.dataset.projectMode = '0';
+            projBtn.setAttribute('aria-pressed','false');
+            const prjWrap = r.querySelector('.project-wrap');
+            if (prjWrap) prjWrap.remove();
+            if (matSel) matSel.style.display = '';
+            if (typeSel) typeSel.style.display = '';
+            if (thSel) thSel.style.display = '';
+            if (wEl) wEl.style.display = '';
+            if (lenEl) lenEl.style.display = '';
+            // return icon next to material select: in RTL, place BEFORE select to appear on its right
+            const isRTL = (document.documentElement && document.documentElement.dir === 'rtl');
+            if (matSel) {
+                if (isRTL && matSel.before) matSel.before(projBtn);
+                else if (matSel.after) matSel.after(projBtn);
+            }
+        };
+        projBtn.addEventListener('click', (e)=>{
+            e.preventDefault(); e.stopPropagation();
+            if (r.dataset.projectMode === '1') exitProjectMode(); else enterProjectMode();
+        });
+    }
+    try { wireProjectToggle(row); } catch(_){ }
     list.appendChild(row);
     try { updateReqEmptyState(); } catch(_){}
 }
@@ -2608,17 +2787,20 @@ if (selUnits) {
         saveData('unitSystem', unitSystem);
         // Convert saw thickness UI value and update chip label (persist stored mm)
         const sawInput = document.getElementById('saw-thickness');
+    const kerfHidden = document.getElementById('kerf');
         const sawUnit = document.getElementById('saw-unit');
         if (sawInput && sawUnit) {
-            const current = Number(sawInput.value || 0);
+            const current = parseFloat(sawInput.value) || 0;
             let newVal = current;
             if (isFinite(current)) newVal = unitSystem === 'imperial' ? (current / 25.4) : (current * 25.4);
-            sawInput.value = unitSystem === 'imperial' ? Number(newVal).toFixed(3) : String(Math.round(newVal));
+            const numStr = unitSystem === 'imperial' ? Number(newVal).toFixed(3) : String(Math.round(newVal));
+            sawInput.value = numStr + ' ' + (unitSystem === 'imperial' ? (he ? 'אינץ׳' : 'inch') : (he ? 'מ״מ' : 'mm'));
             const he = language === 'he';
             sawUnit.textContent = unitSystem === 'imperial' ? (he ? 'אינץ׳' : 'inch') : (he ? 'מ״מ' : 'mm');
             try {
-                const mm = unitSystem === 'imperial' ? (Number(sawInput.value || 0) * 25.4) : Number(sawInput.value || 0);
+                const mm = unitSystem === 'imperial' ? (Number(numStr) * 25.4) : Number(numStr);
                 if (isFinite(mm)) saveData('kerfMM', mm);
+        if (kerfHidden) kerfHidden.value = String(mm);
             } catch {}
         }
         // Refresh inventory and requirement placeholders (unit labels)
@@ -2652,76 +2834,171 @@ try {
     const btn = document.getElementById('saw-settings-btn');
     const inputMain = document.getElementById('saw-thickness');
     const unitMain = document.getElementById('saw-unit');
-    const pop = document.getElementById('saw-popover');
     if (btn) btn.hidden = false;
-    const closePopover = () => { if (pop) pop.hidden = true; };
+    const closePopover = () => { 
+        const row = document.getElementById('saw-settings-row');
+        if (row) row.remove();
+    };
     const openPopover = () => {
-        if (!btn || !pop || !inputMain || !unitMain) return;
+        if (!btn || !inputMain || !unitMain) return;
         const unitLbl = unitMain.textContent || 'mm';
         const he = (document.documentElement.lang || 'he') === 'he';
-    pop.hidden = false;
+        const actionsCenter = document.querySelector('.actions-center');
+        if (!actionsCenter) return;
+        const rowDiv = document.createElement('div');
+        rowDiv.id = 'saw-settings-row';
+        rowDiv.style.display = 'flex';
+        rowDiv.style.alignItems = 'center';
+        rowDiv.style.gap = '10px';
+        rowDiv.style.margin = '20px 0';
+        rowDiv.style.flexWrap = 'wrap';
+        rowDiv.style.justifyContent = 'center';
+        rowDiv.style.border = 'none';
+        rowDiv.style.background = 'transparent';
+    rowDiv.style.maxWidth = '100%';
+    rowDiv.style.position = 'relative';
     const isSubscribed = true;
-    pop.innerHTML = `
-            <div class="row" style="justify-content:space-between">
-              <label class="inline" style="gap:8px">
-                <span>${he ? 'עובי מסור' : 'Saw kerf'}</span>
-            <input id="kerf-input" type="number" min="0" step="0.1" value="" placeholder="${he?'הזן ערך':'Enter value'}" />
-                <span class="chip">${unitLbl}</span>
-              </label>
+    const rowDir = he ? 'row-reverse' : 'row';
+    const sliderRowStyle = `display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; flex-direction:${rowDir}`;
+    rowDiv.innerHTML = `
+            <div class="row" style="${sliderRowStyle}">
+                <span id="orientation-switch" class="switch" data-on="${sawAdv.orientationLock ? 1 : 0}"><span class="knob" style="color:${sawAdv.orientationLock ? '#000' : '#ccc'}; text-align:center; line-height:20px;">🔒</span></span>
+                <span>${he ? 'העדף כיוון' : 'Orientation lock'} <span class="help-icon" data-help="orientation" tabindex="0" title="${he ? 'בחרו אופציה זו אם תרצו לחתוך בכיוון הסיבים בלבד. הפלטות מוצגות תמיד כך שהצלע הארוכה היא הצלע האופקית' : 'Select this to cut only along the grain. Plates are shown with the long side as horizontal.'}" aria-label="${he ? 'בחרו אופציה זו אם תרצו לחתוך בכיוון הסיבים בלבד. הפלטות מוצגות תמיד כך שהצלע הארוכה היא הצלע האופקית' : 'Select this to cut only along the grain. Plates are shown with the long side as horizontal.'}" role="img">?</span></span>
             </div>
-            <hr style="border:none;border-top:1px solid #eee;margin:8px 0" />
-                        <div class="row">
-                            <span>${he ? 'תגית' : 'Tag'} <span class="lock" aria-hidden="true">🔒</span></span>
-                            <span id="tag-switch" class="switch" data-on="${sawAdv.tagOn ? 1 : 0}"><span class="knob"></span></span>
-                        </div>
+            <div id="orientation-pref" class="row" style="margin:${sawAdv.orientationLock? '10px' : '0'} 0 ${sawAdv.orientationLock? '10px' : '0'}; display:${sawAdv.orientationLock?'flex':'none'}; align-items:center; gap:8px; justify-content:flex-end; flex-direction:${rowDir}">
+                <label class="inline" style="gap:6px">
+                    <span>${he ? 'העדפה:' : 'Preference:'}</span>
+                    <select id="orientation-select" class="btn select">
+                        <option value="horizontal" ${sawAdv.orientationPref==='horizontal'?'selected':''}>${he?'אופקי':'Horizontal'}</option>
+                        <option value="vertical" ${sawAdv.orientationPref==='vertical'?'selected':''}>${he?'אנכי':'Vertical'}</option>
+                    </select>
+                </label>
+            </div>
+            <div class="row" style="${sliderRowStyle}">
+                <span id="edgetrim-switch" class="switch" data-on="${sawAdv.edgeTrimOn ? 1 : 0}"><span class="knob" style="color:${sawAdv.edgeTrimOn ? '#000' : '#ccc'}; text-align:center; line-height:20px;">🔒</span></span>
+                <span>${he ? 'פחת קצוות' : 'Edge trims'} <span class="help-icon" data-help="edgetrim" tabindex="0" title="${he ? 'ציינו את השוליים הפגומים שלא יכנסו למידות הפלטה בחישובים' : 'Specify damaged margins that will not be included in plate dimensions for calculations.'}" aria-label="${he ? 'ציינו את השוליים הפגומים שלא יכנסו למידות הפלטה בחישובים' : 'Specify damaged margins that will not be included in plate dimensions for calculations.'}" role="img">?</span></span>
+            </div>
+            <div id="edgetrim-fields" class="trim-grid" style="display:${sawAdv.edgeTrimOn?'grid':'none'}; margin:8px 0 4px">
+                <!-- Row 1: Top, Bottom (RTL: appears from right to left) -->
+                <label class="inline" style="gap:6px"><span>${he?'עליון':'Top'}:</span><input id="edge-top" type="number" min="0" step="0.1" placeholder="${he?'0 מ״מ':'0 mm'}" value="${Number(sawAdv.edgeTrimTopCm)||0 ? Number(sawAdv.edgeTrimTopCm) : ''}" /></label>
+                <label class="inline" style="gap:6px"><span>${he?'תחתון':'Bottom'}:</span><input id="edge-bottom" type="number" min="0" step="0.1" placeholder="${he?'0 מ״מ':'0 mm'}" value="${Number(sawAdv.edgeTrimBottomCm)||0 ? Number(sawAdv.edgeTrimBottomCm) : ''}" /></label>
+                <!-- Row 2: Right, Left -->
+                <label class="inline" style="gap:6px"><span>${he?'ימין':'Right'}:</span><input id="edge-right" type="number" min="0" step="0.1" placeholder="${he?'0 מ״מ':'0 mm'}" value="${Number(sawAdv.edgeTrimRightCm)||0 ? Number(sawAdv.edgeTrimRightCm) : ''}" /></label>
+                <label class="inline" style="gap:6px"><span>${he?'שמאל':'Left'}:</span><input id="edge-left" type="number" min="0" step="0.1" placeholder="${he?'0 מ״מ':'0 mm'}" value="${Number(sawAdv.edgeTrimLeftCm)||0 ? Number(sawAdv.edgeTrimLeftCm) : ''}" /></label>
+            </div>
+            <div class="row" style="${sliderRowStyle}">
+                <span id="sawcut-switch" class="switch" data-on="${sawAdv.sawCuttingOn ? 1 : 0}"><span class="knob" style="color:${sawAdv.sawCuttingOn ? '#000' : '#ccc'}; text-align:center; line-height:20px;">🔒</span></span>
+                <span>${he ? 'חיתוך מסורי' : 'Saw cutting'} <span class="help-icon" data-help="sawcut" tabindex="0" title="${he ? 'החיתוך מתבצע ע״י מסור דיסק או ג׳יקסו ולא כחיתוך גיליוטיני (קצה לקצה)' : 'Cut is with a circular saw or jigsaw, not guillotine (edge-to-edge)'}" aria-label="${he ? 'החיתוך מתבצע ע״י מסור דיסק או ג׳יקסו ולא כחיתוך גיליוטיני (קצה לקצה)' : 'Cut is with a circular saw or jigsaw, not guillotine (edge-to-edge)'}" role="img">?</span></span>
+            </div>
+            <div class="row" style="${sliderRowStyle}; justify-content:flex-end">
+                <label class="inline" style="gap:6px">
+                    <span>${he ? 'עובי מסור' : 'Saw kerf'}</span>
+                    <input id="kerf-input" type="text" min="0" step="0.1" value="" placeholder="${he?'הזן ערך':'Enter value'}" class="btn select" style="width:80px;" />
+                </label>
+            </div>
         `;
-    // מיקום נשלט כעת ע"י CSS (שמאל המסך, מרכז אנכי)
-    pop.style.position = 'fixed';
-    pop.style.top = '50%';
-    pop.style.left = '14px';
-    pop.style.transform = 'translateY(-50%)';
+        btn.after(rowDiv);
         // Handlers
-        const onDoc = (e) => { if (!pop.contains(e.target) && e.target !== btn) { document.removeEventListener('click', onDoc, true); closePopover(); } };
+        const onDoc = (e) => { if (!rowDiv.contains(e.target) && e.target !== btn) { document.removeEventListener('click', onDoc, true); closePopover(); } };
         document.addEventListener('click', onDoc, true);
     // איפוס שדות בכל פתיחה
     // no edge trim fields
-    const kerfEl = pop.querySelector('#kerf-input');
+    const kerfEl = rowDiv.querySelector('#kerf-input');
     if (kerfEl) {
         let savedMM = Number(loadData('kerfMM'));
         if (!isFinite(savedMM) || savedMM <= 0) savedMM = 3;
         const txt = (unitMain.textContent||'').toLowerCase();
         const isInch = txt.includes('inch') || txt.includes('אינץ');
-        kerfEl.value = isInch ? Number(savedMM/25.4).toFixed(3) : String(Math.round(savedMM));
+        const num = isInch ? Number(savedMM/25.4).toFixed(3) : String(Math.round(savedMM));
+        kerfEl.value = num + ' ' + unitLbl;
     }
-    pop.querySelector('#kerf-input')?.addEventListener('input', (ev) => {
-            inputMain.value = ev.target.value;
-            try { inputMain.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
+    rowDiv.querySelector('#kerf-input')?.addEventListener('focus', (ev) => {
+        if (ev.target.value.includes(' ')) {
+            ev.target.value = '';
+        }
+    });
+    // Tooltip helpers (hover or click)
+        const removeTooltip = () => { try{ rowDiv.querySelectorAll('.help-tooltip').forEach(n=>n.remove()); }catch(_){} };
+        const showTooltip = (anchor, text) => {
+            removeTooltip();
+            const tip = document.createElement('div');
+            tip.className = 'help-tooltip';
+            tip.textContent = text;
+            rowDiv.appendChild(tip);
+            // position near icon
+            try {
+                const isRTL = (document.documentElement && document.documentElement.dir === 'rtl');
+                const ar = anchor.getBoundingClientRect();
+                const rr = rowDiv.getBoundingClientRect();
+                const top = Math.max(0, ar.top - rr.top - 4);
+                let left;
+                if (isRTL) left = Math.max(0, ar.left - rr.left - tip.offsetWidth - 8);
+                else left = Math.max(0, ar.right - rr.left + 8);
+                tip.style.top = top + 'px';
+                tip.style.left = left + 'px';
+            } catch(_){ }
+            const onDoc = (e) => { if (!tip.contains(e.target) && e.target !== anchor) { removeTooltip(); document.removeEventListener('click', onDoc, true); } };
+            setTimeout(()=> document.addEventListener('click', onDoc, true), 0);
+        };
+        const wireHelp = (key, text) => {
+            const el = rowDiv.querySelector(`.help-icon[data-help="${key}"]`);
+            if (!el) return;
+            const t = text;
+            el.addEventListener('mouseenter', ()=> showTooltip(el, t));
+            el.addEventListener('mouseleave', ()=> removeTooltip());
+            el.addEventListener('click', (e)=>{ e.stopPropagation(); showTooltip(el, t); });
+            el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); showTooltip(el, t); }});
+        };
+        wireHelp('orientation', he ? 'בחרו אופציה זו אם תרצו לחתוך בכיוון הסיבים בלבד. הפלטות מוצגות תמיד כך שהצלע הארוכה היא הצלע האופקית' : 'Select this to cut only along the grain. Plates are shown with the long side as horizontal.');
+        wireHelp('edgetrim', he ? 'ציינו את השוליים הפגומים שלא יכנסו למידות הפלטה בחישובים' : 'Specify damaged margins that will not be included in plate dimensions for calculations.');
+        wireHelp('sawcut', he ? 'החיתוך מתבצע ע״י מסור דיסק או ג׳יקסו ולא כחיתוך גיליוטיני (קצה לקצה)' : 'Cut is with a circular saw or jigsaw, not guillotine (edge-to-edge)');
+
+    // Orientation lock toggle
+        rowDiv.querySelector('#orientation-switch')?.addEventListener('click', () => {
+            sawAdv.orientationLock = !sawAdv.orientationLock; saveData('sawAdv', sawAdv);
+            const sw = rowDiv.querySelector('#orientation-switch'); if (sw) sw.setAttribute('data-on', sawAdv.orientationLock ? '1' : '0');
+            const knob = sw.querySelector('.knob'); if (knob) { knob.style.color = sawAdv.orientationLock ? '#000' : '#ccc'; }
+            const pref = rowDiv.querySelector('#orientation-pref'); if (pref) pref.style.display = sawAdv.orientationLock ? 'flex' : 'none';
+            if (pref) pref.style.margin = sawAdv.orientationLock ? '8px 0 8px' : '0';
         });
-    // edge trim controls removed
-        pop.querySelector('#tag-switch')?.addEventListener('click', () => {
-            sawAdv.tagOn = !sawAdv.tagOn; saveData('sawAdv', sawAdv);
-            const sw = pop.querySelector('#tag-switch'); if (sw) sw.setAttribute('data-on', sawAdv.tagOn ? '1' : '0');
-            // add/remove tag inputs in existing rows
-            document.querySelectorAll('#requirements-list .req-row').forEach(row => {
-                const exists = row.querySelector('input[data-field="tag"]');
-                if (sawAdv.tagOn && !exists) {
-                    const inp = document.createElement('input');
-                    inp.type = 'text'; inp.setAttribute('data-field', 'tag');
-                    inp.placeholder = he ? 'תגית' : 'Tag';
-                    const btnRemove = row.querySelector('.btn-remove');
-                    if (btnRemove) btnRemove.before(inp); else row.appendChild(inp);
-                } else if (!sawAdv.tagOn && exists) {
-                    exists.remove();
-                }
-            });
-            const reqs = gatherRequirements(); if (Array.isArray(reqs) && reqs.length) { const res = computeOptimization(); renderResults(res); }
+        rowDiv.querySelector('#orientation-select')?.addEventListener('change', (e)=>{
+            const v = (e.target && e.target.value)==='vertical' ? 'vertical' : 'horizontal';
+            sawAdv.orientationPref = v; saveData('sawAdv', sawAdv);
         });
+    // Edge trim toggle + fields
+        rowDiv.querySelector('#edgetrim-switch')?.addEventListener('click', () => {
+            sawAdv.edgeTrimOn = !sawAdv.edgeTrimOn; saveData('sawAdv', sawAdv);
+            const sw = rowDiv.querySelector('#edgetrim-switch'); if (sw) sw.setAttribute('data-on', sawAdv.edgeTrimOn ? '1' : '0');
+            const knob = sw.querySelector('.knob'); if (knob) { knob.style.color = sawAdv.edgeTrimOn ? '#000' : '#ccc'; }
+            const box = rowDiv.querySelector('#edgetrim-fields'); if (box) box.style.display = sawAdv.edgeTrimOn ? 'grid' : 'none';
+        });
+        const et = rowDiv.querySelector('#edge-top');
+        const eb = rowDiv.querySelector('#edge-bottom');
+        const er = rowDiv.querySelector('#edge-right');
+        const el = rowDiv.querySelector('#edge-left');
+        const saveEdgeVals = ()=>{
+            sawAdv.edgeTrimTopCm = Number(et?.value||0) || 0;
+            sawAdv.edgeTrimBottomCm = Number(eb?.value||0) || 0;
+            sawAdv.edgeTrimRightCm = Number(er?.value||0) || 0;
+            sawAdv.edgeTrimLeftCm = Number(el?.value||0) || 0;
+            saveData('sawAdv', sawAdv);
+        };
+        et?.addEventListener('input', saveEdgeVals);
+        eb?.addEventListener('input', saveEdgeVals);
+        er?.addEventListener('input', saveEdgeVals);
+        el?.addEventListener('input', saveEdgeVals);
+    // Saw cutting toggle
+        rowDiv.querySelector('#sawcut-switch')?.addEventListener('click', () => {
+            sawAdv.sawCuttingOn = !sawAdv.sawCuttingOn; saveData('sawAdv', sawAdv);
+            const sw = rowDiv.querySelector('#sawcut-switch'); if (sw) sw.setAttribute('data-on', sawAdv.sawCuttingOn ? '1' : '0');
+            const knob = sw.querySelector('.knob'); if (knob) { knob.style.color = sawAdv.sawCuttingOn ? '#000' : '#ccc'; }
+        });
+    // No save button needed — inputs auto-save on change
     };
     if (btn) btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (!pop) return;
-        // Toggle: clicking the icon again closes the panel
-        if (pop.hidden === false) { closePopover(); return; }
+        const row = document.getElementById('saw-settings-row');
+        if (row) { closePopover(); return; }
         openPopover();
     });
 } catch {}
@@ -2803,7 +3080,7 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
     if (lottieEl) lottieEl.style.display = 'none';
     if (loaderText) loaderText.textContent = language === 'he' ? 'מחשב אופטימיזציה…' : 'Computing optimization…';
         // If lottie is available, try to load; otherwise keep spinner
-        if (typeof lottie !== 'undefined' && lottieEl) {
+    if (typeof lottie !== 'undefined' && lottieEl) {
             try {
                 // Prefer inline animation data if provided (avoid XHR on file://)
                 const inlineAnim = (typeof window !== 'undefined' && window.LOADER_ANIM) ? window.LOADER_ANIM : null;
@@ -3182,7 +3459,7 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
                                                                 if (ti === 0) {
                                                                     try {
                                                                         const ths = Array.from(tbl.querySelectorAll('thead th'));
-                                                                        const cutsIdx = ths.findIndex(th => /חיתוכים|Cuts/.test(th.textContent||''));
+                                                                        const cutsIdx = ths.findIndex(th => /(צבא\s*חיתוכים|חיתוכים|Cuts)/.test(th.textContent||''));
                                                                         if (cutsIdx >= 0) {
                                                                             ths[cutsIdx].classList.add('cuts');
                                                                             Array.from(tbl.querySelectorAll(`tbody tr`)).forEach(tr => {
@@ -3711,6 +3988,7 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
     try {
         const input = document.getElementById('saw-thickness');
         const unitChip = document.getElementById('saw-unit');
+    const kerfHidden = document.getElementById('kerf');
         const recomputeIfAny = () => {
             try {
                 const reqs = gatherRequirements();
@@ -3725,17 +4003,21 @@ if (dbWrap) dbWrap.addEventListener('input', (e) => {
     if (!isFinite(savedMM) || savedMM <= 0) { savedMM = 3; saveData('kerfMM', savedMM); }
     if (input && unitChip && isFinite(savedMM)) {
             if ((loadData('unitSystem')||unitSystem) === 'imperial') {
-                input.value = (savedMM/25.4).toFixed(3);
+                input.value = (savedMM/25.4).toFixed(3) + ' ' + ((language==='he') ? 'אינץ׳' : 'inch');
                 unitChip.textContent = (language==='he') ? 'אינץ׳' : 'inch';
             } else {
-        input.value = Math.round(savedMM);
+        input.value = Math.round(savedMM) + ' ' + ((language==='he') ? 'מ״מ' : 'mm');
                 unitChip.textContent = (language==='he') ? 'מ״מ' : 'mm';
             }
+            if (kerfHidden) kerfHidden.value = String(savedMM);
         }
         const onChange = () => {
-            const v = Number(input.value || 0);
+            const v = parseFloat(input.value) || 0;
             const mm = (unitSystem==='imperial') ? (v*25.4) : v;
-            if (isFinite(mm) && mm>=0) saveData('kerfMM', mm);
+            if (isFinite(mm) && mm>=0) {
+                saveData('kerfMM', mm);
+                if (kerfHidden) kerfHidden.value = String(mm);
+            }
             recomputeIfAny();
         };
         if (input) {

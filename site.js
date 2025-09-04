@@ -35,6 +35,11 @@
         // Show logo on Hebrew (RTL) by default; keep it visible also in EN if you want
         logo.style.display = 'block';
         logo.setAttribute('alt', isHe ? 'לוגו' : 'Logo');
+        // Navigate to landing when clicking the logo
+        try {
+          logo.style.cursor = 'pointer';
+          logo.addEventListener('click', ()=>{ location.href = 'home.html'; });
+        } catch{}
       }
     } catch{}
   }
@@ -83,6 +88,25 @@
     localStorage.setItem('currencySymbol', symbolFromCurrency(next));
     location.reload();
   }
+
+  // Redirect directory root ("/") to home.html so refresh lands on the hero
+  try {
+    const p = (location.pathname||'');
+    const isDir = /\/$/.test(p);
+    if (isDir && !/home\.html$/.test(p) && location.hash!=='#index') {
+      location.replace('home.html');
+    }
+  } catch {}
+
+  // Also redirect direct visits to index.html back to home.html unless explicitly opened via #index
+  try {
+    const p = (location.pathname||'').toLowerCase();
+    const onIndex = p.endsWith('/index.html') || p.endsWith('index.html');
+    const explicitIndex = (location.hash||'') === '#index';
+    if (onIndex && !explicitIndex) {
+      location.replace('home.html');
+    }
+  } catch {}
 
   // Apply direction as early as possible to avoid FOUC
   try { applyDir(); } catch {}
@@ -233,36 +257,86 @@
       mo.observe(document.body, { childList:true, subtree:true });
     }catch{}
 
-    // Build & localize nav (desktop + mobile) with required order; keep Pricing persistent
+    // Ensure consistent header (logo + three selects) across all pages
+    try {
+      const ensureHeader = () => {
+        let header = document.querySelector('header.topbar');
+        const standard = () => `
+          <div class="top-left"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="${lang()==='he'?'לוגו':'Logo'}" /></div>
+          <div class="top-actions">
+            <select id="select-lang" class="btn select" title="Language">
+              <option value="he">🇮🇱</option>
+              <option value="en">🇺🇸</option>
+            </select>
+            <select id="select-currency" class="btn select" title="Currency">
+              <option value="€" data-en="Euro">€</option>
+              <option value="$" data-en="Dollar">$</option>
+              <option value="₪" data-en="NIS">₪</option>
+            </select>
+            <select id="select-units" class="btn select" title="Units">
+              <option value="metric" data-en="Metric">📏 מטרי</option>
+              <option value="imperial" data-en="Inches">📏 אימפריאלי</option>
+            </select>
+          </div>`;
+        if (!header){
+          header = document.createElement('header');
+          header.className = 'topbar';
+          header.innerHTML = standard();
+          document.body.insertBefore(header, document.body.firstChild);
+          return;
+        }
+        const hasLang = header.querySelector('#select-lang');
+        const hasCur  = header.querySelector('#select-currency');
+        const hasUnit = header.querySelector('#select-units');
+        const hasLogo = header.querySelector('#site-logo');
+        if (!hasLang || !hasCur || !hasUnit || !hasLogo){
+          header.innerHTML = standard();
+        }
+      };
+      ensureHeader();
+    } catch{}
+
+    // Build & localize nav (desktop + mobile) with requested order
     try {
       const isHe = lang()==='he';
       const labels = {
-        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
-        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  pricing: 'Price List', contact: 'Contact' }
+        he: { index: 'מחשבון חיתוך אופטימלי', tools: 'כלים מרכזיים', guide: 'הסבר מערכת', pricing: 'מחירון', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', contact: 'צור קשר' },
+        en: { index: 'Cut Optimizer',              tools: 'Key Tools',             guide: 'System Guide', pricing: 'Price List', plans: 'Downloadable Plans', articles: 'Articles', about: 'About',  contact: 'Contact' }
       };
       const pageTitles = {
-        he: { index: 'מחשבון חיתוך אופטימלי', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', pricing: 'מחירון', contact: 'צור קשר' },
-        en: { index: 'Cut Optimizer',              plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  pricing: 'Price List', contact: 'Contact' }
+        he: { home: 'דף הבית', index: 'מחשבון חיתוך אופטימלי', tools: 'כלים מרכזיים', guide: 'הסבר מערכת', pricing: 'מחירון', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', contact: 'צור קשר' },
+        en: { home: 'Home',     index: 'Cut Optimizer',              tools: 'Key Tools',             guide: 'System Guide', pricing: 'Price List', plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  contact: 'Contact' }
       };
       const navOrder = [
-        { href: 'index.html',   key: 'index'   },
-        { href: 'plans.html',   key: 'plans'   },
-        { href: 'articles.html', key: 'articles' },
-        { href: 'about.html',   key: 'about'   },
-        { href: 'pricing.html', key: 'pricing' },
-        { href: 'contact.html', key: 'contact' }
+        { href: 'index.html#index',  key: 'index'   },
+        { href: 'home.html#tools',   key: 'tools'   },
+        { href: 'home.html#guide',   key: 'guide'   },
+        { href: 'home.html#pricing', key: 'pricing' },
+        { href: 'plans.html',        key: 'plans'   },
+        { href: 'articles.html',     key: 'articles' },
+        { href: 'home.html#about',   key: 'about'   },
+        { href: 'home.html#contact', key: 'contact' }
       ];
       const buildNavHtml = (activePath) => navOrder.map(item => {
         const text = labels[isHe?'he':'en'][item.key];
         const isArticleDetail = /\/(?:article.html)$/.test(activePath);
-        const isActive = activePath.endsWith('/'+item.href)
-          || activePath.endsWith(item.href)
-          || (item.key==='index' && /\/(?:index.html)?$/.test(activePath))
-          || (item.key==='articles' && isArticleDetail);
+        const hasHash = (item.href||'').includes('#');
+        let isActive = false;
+        if (hasHash){
+          const parts = item.href.split('#');
+          const base = parts[0]; const anchor = '#'+(parts[1]||'');
+          const onHome = activePath.endsWith('/'+base) || activePath.endsWith(base);
+          isActive = onHome && (location.hash === anchor);
+        } else {
+          isActive = activePath.endsWith('/'+item.href)
+            || activePath.endsWith(item.href)
+            || (item.key==='index' && /\/(?:index.html)?$/.test(activePath))
+            || (item.key==='articles' && isArticleDetail);
+        }
         return `<a href="${item.href}" class="nav-link${isActive?' active':''}">${text}</a>`;
       }).join('');
 
-      const path = (location.pathname||'').toLowerCase();
+  const path = (location.pathname||'').toLowerCase();
       // Desktop nav
       const wrap = document.querySelector('.main-nav .nav-wrap');
       if (wrap) wrap.innerHTML = buildNavHtml(path);
@@ -270,15 +344,91 @@
       const mobileNav = document.querySelector('#mobile-drawer nav[aria-label="mobile"]');
       if (mobileNav) mobileNav.innerHTML = buildNavHtml(path);
 
+      // Compute sticky offset (topbar + nav) and keep it updated
+      const measureAndSetStickyOffset = ()=>{
+        try{
+          const tb = document.querySelector('.topbar');
+          const nv = document.querySelector('.main-nav');
+          const h1 = tb ? tb.getBoundingClientRect().height : 0;
+          const h2 = nv ? nv.getBoundingClientRect().height : 0;
+          const total = Math.round(h1 + h2);
+          const root = document.documentElement;
+          root.style.setProperty('--topbar-h', Math.round(h1) + 'px');
+          root.style.setProperty('--nav-h', Math.round(h2) + 'px');
+          root.style.setProperty('--sticky-offset', total + 'px');
+        }catch{}
+      };
+      measureAndSetStickyOffset();
+      window.addEventListener('resize', measureAndSetStickyOffset, { passive:true });
+
+      // Smooth-scroll in-page home sections to full view on anchor clicks
+      try{
+        const isHome = path.endsWith('/home.html') || path.endsWith('home.html') || /\/$/.test(path);
+        const scrollToSection = (sec)=>{
+          if (!sec) return;
+          // Ensure section fills the viewport area under sticky header
+          try { if (sec.classList && sec.classList.contains('fullview')) sec.style.minHeight = 'calc(100vh - var(--sticky-offset))'; } catch{}
+          // Use manual scroll with sticky offset compensation for consistent results
+          const rect = sec.getBoundingClientRect();
+          // Refresh sticky offset just before scrolling to be precise
+          measureAndSetStickyOffset();
+          const sticky = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sticky-offset')) || 0;
+          const top = rect.top + window.pageYOffset - sticky;
+          window.scrollTo({ top, behavior:'smooth' });
+        };
+        const handler = (e) => {
+          const a = e.target.closest('a[href*="#"]');
+          if (!a) return;
+          const href = a.getAttribute('href')||'';
+          if (!/^home\.html(?:#|$)|^#/.test(href)) return;
+          const hash = href.includes('#') ? ('#'+href.split('#')[1]) : (location.hash||'');
+          const id = hash.replace('#','');
+          const sec = document.getElementById(id);
+          if (sec){
+            e.preventDefault();
+            history.pushState(null, '', 'home.html'+hash);
+            scrollToSection(sec);
+          }
+        };
+        document.addEventListener('click', handler);
+        // On load with a hash, ensure fullview section is visible
+        if (isHome && location.hash){
+          const id = location.hash.replace('#','');
+          const sec = document.getElementById(id);
+          if (sec){ setTimeout(()=>scrollToSection(sec), 0); }
+        }
+        window.addEventListener('hashchange', ()=>{
+          const id = location.hash.replace('#','');
+          const sec = document.getElementById(id);
+          if (sec){ scrollToSection(sec); }
+        });
+      }catch{}
+  // Ensure a consistent footer across all pages with current year (logo + © YEAR only)
+        try{
+          const footer = document.querySelector('footer.footer');
+          if (footer){
+            const year = new Date().getFullYear();
+            footer.innerHTML = `
+              <div class="footer-inner">
+    <img src="pics/logo.png" alt="Logo" class="footer-logo" />
+    <small>© ${year}</small>
+              </div>`;
+          }
+        }catch{}
+
       // Update document title
-      const isIndex = path.endsWith('/index.html') || /\/(?:index.html)?$/.test(path);
-  if (isIndex) document.title = pageTitles[isHe?'he':'en'].index;
-  else if (path.endsWith('plans.html')) document.title = pageTitles[isHe?'he':'en'].plans;
-  else if (path.endsWith('articles.html')) document.title = pageTitles[isHe?'he':'en'].articles;
-  else if (path.endsWith('article.html')) document.title = pageTitles[isHe?'he':'en'].articles;
-  else if (path.endsWith('about.html')) document.title = pageTitles[isHe?'he':'en'].about;
+    const isIndex = path.endsWith('/index.html') || /\/(?:index.html)?$/.test(path);
+    const isHome  = path.endsWith('/home.html') || path.endsWith('home.html');
+  if (isHome) document.title = pageTitles[isHe?'he':'en'].home;
+  else if (isIndex) document.title = pageTitles[isHe?'he':'en'].index;
+  else if (path.endsWith('tools.html'))  document.title = pageTitles[isHe?'he':'en'].tools;
+  else if (path.endsWith('guide.html'))  document.title = pageTitles[isHe?'he':'en'].guide;
   else if (path.endsWith('pricing.html')) document.title = pageTitles[isHe?'he':'en'].pricing;
-  else if (path.endsWith('contact.html')) document.title = pageTitles[isHe?'he':'en'].contact;
+  else if (path.endsWith('plans.html'))   document.title = pageTitles[isHe?'he':'en'].plans;
+  else if (path.endsWith('articles.html')) document.title = pageTitles[isHe?'he':'en'].articles;
+  else if (path.endsWith('article.html'))  document.title = pageTitles[isHe?'he':'en'].articles;
+  else if (path.endsWith('about.html'))    document.title = pageTitles[isHe?'he':'en'].about;
+  else if (path.endsWith('contact.html'))  document.title = pageTitles[isHe?'he':'en'].contact;
     } catch(e){}
     // Header buttons (if present)
     const bLang = el('#btn-lang'); if (bLang) bLang.addEventListener('click', toggleLang);
@@ -286,10 +436,38 @@
     const bCur = el('#btn-currency'); if (bCur) bCur.addEventListener('click', cycleCurrency);
     // Header selects (all pages) — sync to global state and localize labels
     try {
+      // Helper to wrap a select with an icon overlay so the circle shows a glyph consistently
+      const ensureIconWrap = (sel, getIcon) => {
+        if (!sel) return;
+        if (sel.parentElement && sel.parentElement.classList && sel.parentElement.classList.contains('icon-select-wrap')) {
+          // already wrapped; just refresh icon
+          const span = sel.parentElement.querySelector('.top-icon');
+          if (span) span.textContent = getIcon();
+          return;
+        }
+        const wrap = document.createElement('div');
+        wrap.className = 'icon-select-wrap';
+        sel.parentNode && sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        const span = document.createElement('span');
+        span.className = 'top-icon';
+        span.textContent = getIcon();
+        wrap.appendChild(span);
+        sel.addEventListener('focus', ()=> wrap.classList.add('focused'));
+        sel.addEventListener('blur',  ()=> wrap.classList.remove('focused'));
+        sel.addEventListener('change', ()=> { try { span.textContent = getIcon(); } catch{} });
+      };
       const selLang = el('#select-lang');
       if (selLang) {
         try { selLang.value = lang(); } catch{}
         selLang.addEventListener('change', (e)=>{ setLang(e.target.value); location.reload(); });
+        ensureIconWrap(selLang, ()=>{
+          try {
+            const opt = selLang.options[selLang.selectedIndex];
+            const txt = (opt && opt.textContent) ? opt.textContent.trim() : '';
+            return txt || (lang()==='he'?'🇮🇱':'🇺🇸');
+          } catch { return '🌐'; }
+        });
       }
       const selUnits = el('#select-units');
       if (selUnits) {
@@ -304,8 +482,9 @@
             }
           });
         } catch{}
-        try { selUnits.value = unit(); } catch{}
-        selUnits.addEventListener('change', (e)=>{ setUnit(e.target.value); location.reload(); });
+  try { selUnits.value = unit(); } catch{}
+  selUnits.addEventListener('change', (e)=>{ setUnit(e.target.value); location.reload(); });
+  ensureIconWrap(selUnits, ()=> '📏');
       }
       const selCur = el('#select-currency');
       if (selCur) {
@@ -327,6 +506,16 @@
           const code = s==='€'?'EUR':s==='$'?'USD':s==='₪'?'ILS':'EUR';
           setCurrency(code);
           location.reload();
+        });
+        ensureIconWrap(selCur, ()=>{
+          try {
+            const v = (selCur.value||'').trim();
+            if (v) return v; // symbol like €, $, ₪
+          } catch{}
+          try {
+            const opt = selCur.options[selCur.selectedIndex];
+            return (opt && opt.textContent) ? opt.textContent.trim() : '€';
+          } catch { return '€'; }
         });
       }
     } catch {}
@@ -352,7 +541,7 @@
               <h3 class="global-modal-title">${(document.documentElement.lang||'he')==='he'?'עובי מסור':'Saw kerf'}</h3>
               <div class="global-modal-body">
                 <div class="kerf-row">
-                  <input id="kerf-input" type="number" min="0" step="0.1" value="${inputMain.value}" aria-label="${(document.documentElement.lang||'he')==='he'?'עובי מסור':'Saw kerf'}" />
+                  <input id="kerf-input" type="text" min="0" step="0.1" value="${inputMain.value}" aria-label="${(document.documentElement.lang||'he')==='he'?'עובי מסור':'Saw kerf'}" />
                   <span class="chip">${unitLbl}</span>
                 </div>
               </div>
@@ -380,29 +569,33 @@
       let hamburger = document.getElementById('hamburger');
       let backdrop = document.getElementById('drawer-backdrop');
       let drawer = document.getElementById('mobile-drawer');
-      const ensureNavLinks = (container) => {
+  const ensureNavLinks = (container) => {
         try{
           const src = Array.from(document.querySelectorAll('.main-nav .nav-wrap a'));
           if (src.length && container){
             container.innerHTML = src.map(a=>`<a href="${a.getAttribute('href')||'#'}" class="nav-link${a.classList.contains('active')?' active':''}">${a.textContent||''}</a>`).join('');
           } else if (container){
             const isHe = (document.documentElement.lang||'he')==='he';
-            const fall = isHe
-              ? [
-                  ['index.html',   'מחשבון חיתוך אופטימלי'],
+    const fall = isHe
+        ? [
+      ['index.html#index',  'מחשבון חיתוך אופטימלי'],
+      ['home.html#tools',   'כלים מרכזיים'],
+      ['home.html#guide',   'הסבר מערכת'],
+      ['home.html#pricing', 'מחירון'],
                   ['plans.html',   'תוכניות בנייה להורדה'],
                   ['articles.html','מאמרים'],
-                  ['about.html',   'אודות'],
-                  ['pricing.html', 'מחירון'],
-                  ['contact.html', 'צור קשר']
+  ['home.html#about',   'אודות'],
+      ['home.html#contact', 'צור קשר']
                 ]
-              : [
-                  ['index.html',   'Cut Optimizer'],
+        : [
+      ['index.html#index',  'Cut Optimizer'],
+      ['home.html#tools',   'Key Tools'],
+      ['home.html#guide',   'System Guide'],
+      ['home.html#pricing', 'Price List'],
                   ['plans.html',   'Downloadable Plans'],
                   ['articles.html','Articles'],
-                  ['about.html',   'About'],
-                  ['pricing.html', 'Price List'],
-                  ['contact.html', 'Contact']
+  ['home.html#about',   'About'],
+      ['home.html#contact', 'Contact']
                 ];
             container.innerHTML = fall.map(([h,t])=>`<a href="${h}" class="nav-link">${t}</a>`).join('');
           }
