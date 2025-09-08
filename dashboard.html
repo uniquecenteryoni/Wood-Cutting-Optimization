@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="dashboard.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script defer src="app.js?v=2"></script>
+</head>
+<body class="dash-body">
+  <header class="topbar"></header>
+  <div class="dash-app" id="dash-app" hidden>
+    <aside class="dash-sidebar" aria-label="dashboard navigation">
+      <div class="dash-side-inner">
+        <nav class="dash-nav" id="dash-nav">
+          <ul class="dash-menu flat">
+            <li><a href="#" class="item active" data-view="newProject">➕ <span class="lang-he">צור פרויקט תכנון חדש</span><span class="lang-en" style="display:none">New Planning Project</span></a></li>
+            <li><a href="#" class="item" data-view="listProjects">🗂️ <span class="lang-he">פרויקטים שמורים</span><span class="lang-en" style="display:none">Saved Projects</span></a></li>
+            <li><a href="#" class="item" data-view="archive">�️ <span class="lang-he">ארכיון</span><span class="lang-en" style="display:none">Archive</span></a></li>
+            <li class="dash-sep"></li>
+            <li><a href="#" class="item" data-view="importInventory">� <span class="lang-he">ייבוא מלאי</span><span class="lang-en" style="display:none">Inventory Import</span></a></li>
+            <li><a href="#" class="item" data-view="warehouse">⭐ <span class="lang-he">מלאי חומרים</span><span class="lang-en" style="display:none">Material Warehouse</span></a></li>
+            <li><a href="#" class="item" data-view="settings">🔧 <span class="lang-he">הגדרות</span><span class="lang-en" style="display:none">Settings</span></a></li>
+            <li class="dash-sep"></li>
+            <li><a href="#" class="item" data-view="subscription">💳 <span class="lang-he">מנוי וחיוב</span><span class="lang-en" style="display:none">Subscription & Billing</span></a></li>
+            <li><a href="#" class="item" data-view="invoices">📄 <span class="lang-he">חשבוניות</span><span class="lang-en" style="display:none">Invoices</span></a></li>
+            <li><a href="#" class="item" data-view="systemGuide">📘 <span class="lang-he">הסבר מערכת</span><span class="lang-en" style="display:none">System Guide</span></a></li>
+            <li class="dash-sep"></li>
+            <li><a href="#" class="item" data-view="newRequest">� <span class="lang-he">באגים & פיצ'רים</span><span class="lang-en" style="display:none">Bugs & Features</span></a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="dash-side-foot">
+        <button id="dash-logout" class="btn" style="width:100%">🚪 <span class="lang-he">התנתק</span><span class="lang-en" style="display:none">Logout</span></button>
+      </div>
+    </aside>
+    <main class="dash-main" id="dash-main" tabindex="-1">
+      <header class="dash-main-head">
+        <h1 class="dash-welcome">
+          <span class="lang-he">ברוך הבא</span>
+          <span class="lang-en" style="display:none">Welcome</span>
+          <span id="dash-user-name"></span>
+        </h1>
+        <div class="dash-user-box" id="dash-user-box"></div>
+      </header>
+      <section class="dash-cards" id="dash-cards">
+        <!-- Quick action cards injected by JS -->
+      </section>
+      <section class="dash-view" id="dash-view" aria-live="polite"></section>
+    </main>
+  </div>
+  <div id="dash-loading" class="dash-loading">
+    <div class="spinner"></div>
+  </div>
+  <script src="site.js?v=2"></script>
+  <script src="loader-anim.js"></script>
+  <script src="dashboard.js?v=2"></script>
+  <!-- Loader overlay for optimization animation -->
+  <div id="loader-overlay" class="loader-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true">
+    <div id="lottie-container" class="lottie-box" aria-label="Loading animation"></div>
+    <div id="spinner-fallback" class="spinner" aria-hidden="true"></div>
+    <div id="loader-text" class="loader-text" aria-live="polite" aria-atomic="true"></div>
+  </div>
+</body>
+</html>

@@ -261,23 +261,59 @@
     try {
       const ensureHeader = () => {
         let header = document.querySelector('header.topbar');
-        const standard = () => `
-          <div class="top-left"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="${lang()==='he'?'לוגו':'Logo'}" /></div>
-          <div class="top-actions">
+        const standard = () => {
+          const isHe = lang()==='he';
+          const isDashboard = document.body.classList.contains('dash-body');
+          const authLabel = (()=>{
+            try {
+              const stored = JSON.parse(localStorage.getItem('authUser')||'null');
+              if (stored && stored.name){
+                return isHe ? 'התנתק' : 'Logout';
+              }
+            } catch {}
+            return isHe ? 'התחברות' : 'Login';
+          })();
+          // If dashboard: only language (hide currency & units)
+          const selects = isDashboard ? `
+            <select id="select-lang" class="btn select" title="Language">
+              <option value="he">🇮🇱</option>
+              <option value="en">🇺🇸</option>
+            </select>` : `
             <select id="select-lang" class="btn select" title="Language">
               <option value="he">🇮🇱</option>
               <option value="en">🇺🇸</option>
             </select>
             <select id="select-currency" class="btn select" title="Currency">
-              <option value="€" data-en="Euro">€</option>
-              <option value="$" data-en="Dollar">$</option>
-              <option value="₪" data-en="NIS">₪</option>
+              <option value="€">€</option>
+              <option value="$">$</option>
+              <option value="₪">₪</option>
             </select>
             <select id="select-units" class="btn select" title="Units">
-              <option value="metric" data-en="Metric">📏 מטרי</option>
-              <option value="imperial" data-en="Inches">📏 אימפריאלי</option>
-            </select>
-          </div>`;
+              <option value="metric" data-en="Metric">📏</option>
+              <option value="imperial" data-en="Inches">📏</option>
+            </select>`;
+          const userMenu = (()=>{
+            if(!isDashboard) return '';
+            try {
+              const stored = JSON.parse(localStorage.getItem('authUser')||'null');
+              const avatarData = localStorage.getItem('userAvatarData');
+              if(stored && stored.email){
+                const email = stored.email.replace(/</g,'&lt;');
+                const avatarSpan = avatarData ? `<span class="avatar has-img" aria-hidden="true"><img src="${avatarData}" alt="avatar"/></span>` : `<span class="avatar" aria-hidden="true">${(email[0]||'U').toUpperCase()}</span>`;
+                return `<div class="user-menu" id="dash-user-menu">\n  <button id="dash-usermenu-btn" class="user-btn" aria-haspopup="true" aria-expanded="false">\n    ${avatarSpan}\n    <span class="user-email">${email}</span>▾\n  </button>\n  <div class="user-menu-panel hidden" id="dash-usermenu-panel" role="menu">\n    <button class="menu-item" data-act="messages" role="menuitem">📥 ${(isHe?'תיבת הודעות':'Message box')}</button>\n    <button class="menu-item" data-act="profile" role="menuitem">👤 ${(isHe?'הגדרות פרופיל':'Profile settings')}</button>\n    <button class="menu-item" data-act="password" role="menuitem">🔒 ${(isHe?'שינוי סיסמה':'Change Password')}</button>\n    <div class="sep"></div>\n    <button class="menu-item logout" data-act="logout" role="menuitem">🚪 ${(isHe?'התנתק':'Logout')}</button>\n  </div>\n</div>`;
+              }
+            }catch{}
+            // Fallback guest user menu (no email)
+            const guestLabel = isHe ? 'אורח' : 'Guest';
+            const guestAvatarData = localStorage.getItem('userAvatarData');
+            const guestAvatarSpan = guestAvatarData ? `<span class="avatar has-img" aria-hidden="true"><img src="${guestAvatarData}" alt="avatar"/></span>` : `<span class="avatar" aria-hidden="true">${(guestLabel[0]||'G').toUpperCase()}</span>`;
+            return `<div class="user-menu" id="dash-user-menu">\n  <button id="dash-usermenu-btn" class="user-btn" aria-haspopup="true" aria-expanded="false">\n    ${guestAvatarSpan}\n    <span class="user-email">${guestLabel}</span>▾\n  </button>\n  <div class="user-menu-panel hidden" id="dash-usermenu-panel" role="menu">\n    <button class="menu-item" data-act="profile" role="menuitem">👤 ${(isHe?'הגדרות פרופיל':'Profile settings')}</button>\n    <button class="menu-item" data-act="password" role="menuitem">🔒 ${(isHe?'שינוי סיסמה':'Change Password')}</button>\n  </div>\n</div>`;
+          })();
+          const authBtn = !isDashboard ? `<button id=\"auth-btn\" type=\"button\" class=\"btn auth-btn\" aria-haspopup=\"dialog\" aria-expanded=\"false\">${authLabel}</button>` : userMenu;
+          return `
+          <div class="top-left"><img id="site-logo" class="site-logo" src="pics/logo.png" alt="${isHe?'לוגו':'Logo'}" /></div>
+          <div class="top-actions">${isHe ? authBtn + selects : selects + authBtn}</div>`;
+        };
         if (!header){
           header = document.createElement('header');
           header.className = 'topbar';
@@ -289,12 +325,63 @@
         const hasCur  = header.querySelector('#select-currency');
         const hasUnit = header.querySelector('#select-units');
         const hasLogo = header.querySelector('#site-logo');
-        if (!hasLang || !hasCur || !hasUnit || !hasLogo){
+        const hasAuth = header.querySelector('#auth-btn');
+        const isDashboard = document.body.classList.contains('dash-body');
+        if (!hasLang || (!isDashboard && (!hasCur || !hasUnit)) || !hasLogo || !hasAuth){
           header.innerHTML = standard();
+        }
+        // Force hide currency/unit selects if dashboard (in case left from earlier build)
+        if(isDashboard){
+          ['#select-currency','#select-units','#btn-currency','#btn-units'].forEach(id=>{ const el = header.querySelector(id); if(el) el.style.display='none'; });
+          wireDashUserMenu(header);
+          // Logo returns to dashboard home view (welcome quick cards)
+          try {
+            const logo = header.querySelector('#site-logo');
+            if(logo){
+              logo.style.cursor='pointer';
+              logo.addEventListener('click', e=>{ e.preventDefault(); try { if(window.renderView) window.renderView('home'); } catch{} });
+            }
+          } catch{}
         }
       };
       ensureHeader();
     } catch{}
+
+    function wireDashUserMenu(header){
+      try {
+        const btn = header.querySelector('#dash-usermenu-btn');
+        const panel = header.querySelector('#dash-usermenu-panel');
+        if(!btn || !panel) return;
+        const toggle = (open)=>{
+          const willOpen = (typeof open==='boolean')?open:panel.classList.contains('hidden');
+          if(willOpen){ panel.classList.remove('hidden'); panel.setAttribute('aria-hidden','false'); btn.setAttribute('aria-expanded','true'); }
+          else { panel.classList.add('hidden'); panel.setAttribute('aria-hidden','true'); btn.setAttribute('aria-expanded','false'); }
+        };
+        btn.addEventListener('click', e=>{ e.stopPropagation(); toggle(); });
+        // Auto flip if overflowing right edge
+        btn.addEventListener('click', ()=>{
+          try {
+            if(panel.classList.contains('hidden')) return; // will open next tick
+            requestAnimationFrame(()=>{
+              const rect = panel.getBoundingClientRect();
+              const vw = window.innerWidth || document.documentElement.clientWidth;
+              if(rect.right > vw - 8){ panel.setAttribute('data-align','flip'); }
+              else { panel.removeAttribute('data-align'); }
+            });
+          } catch{}
+        });
+        document.addEventListener('click', e=>{ if(!panel.classList.contains('hidden') && !panel.contains(e.target) && e.target!==btn) toggle(false); });
+        panel.addEventListener('click', e=>{
+          const item = e.target.closest('.menu-item'); if(!item) return;
+          const act = item.dataset.act;
+          if(act==='logout'){ try { localStorage.removeItem('authUser'); } catch{} location.href='dashboard.html'; return; }
+          if(act==='profile'){ location.hash = '#profile'; }
+          if(act==='messages'){ location.hash = '#messages'; }
+          if(act==='password'){ location.hash = '#change-password'; }
+          toggle(false);
+        });
+      } catch{}
+    }
 
     // Build & localize nav (desktop + mobile) with requested order
     try {
@@ -304,8 +391,12 @@
         en: { index: 'Cut Optimizer',              tools: 'Key Tools',             guide: 'System Guide', pricing: 'Price List', plans: 'Downloadable Plans', articles: 'Articles', about: 'About',  contact: 'Contact' }
       };
       const pageTitles = {
-        he: { home: 'דף הבית', index: 'מחשבון חיתוך אופטימלי', tools: 'כלים מרכזיים', guide: 'הסבר מערכת', pricing: 'מחירון', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', contact: 'צור קשר' },
-        en: { home: 'Home',     index: 'Cut Optimizer',              tools: 'Key Tools',             guide: 'System Guide', pricing: 'Price List', plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  contact: 'Contact' }
+        he: { home: 'דף הבית', index: 'מחשבון חיתוך אופטימלי', tools: 'כלים מרכזיים', guide: 'הסבר מערכת', pricing: 'מחירון', plans: 'תוכניות בנייה להורדה', articles: 'מאמרים', about: 'אודות', contact: 'צור קשר', terms: 'תנאי שימוש', privacy: 'מדיניות פרטיות' },
+        en: { home: 'Home',     index: 'Cut Optimizer',              tools: 'Key Tools',             guide: 'System Guide', pricing: 'Price List', plans: 'Downloadable Plans',    articles: 'Articles', about: 'About',  contact: 'Contact', terms: 'Terms of Use', privacy: 'Privacy Policy' }
+      };
+      const footerLabels = {
+        he: { report: 'דווח על באגים', contact: 'צור קשר', terms: 'תנאי שימוש', privacy: 'מדיניות פרטיות', imp: 'הורד קובץ ייבוא' },
+        en: { report: 'Report a bug',  contact: 'Contact', terms: 'Terms',       privacy: 'Privacy',           imp: 'Download import file' }
       };
       const navOrder = [
         { href: 'index.html#index',  key: 'index'   },
@@ -315,7 +406,7 @@
         { href: 'plans.html',        key: 'plans'   },
         { href: 'articles.html',     key: 'articles' },
         { href: 'home.html#about',   key: 'about'   },
-        { href: 'home.html#contact', key: 'contact' }
+        { href: 'contact.html',      key: 'contact' }
       ];
       const buildNavHtml = (activePath) => navOrder.map(item => {
         const text = labels[isHe?'he':'en'][item.key];
@@ -403,15 +494,23 @@
           if (sec){ scrollToSection(sec); }
         });
       }catch{}
-  // Ensure a consistent footer across all pages with current year (logo + © YEAR only)
+        // Ensure a consistent footer across all pages with current year
         try{
           const footer = document.querySelector('footer.footer');
           if (footer){
             const year = new Date().getFullYear();
+            const f = footerLabels[isHe?'he':'en'];
             footer.innerHTML = `
+              <div class="footer-links">
+                <a href="#" id="link-report">${f.report}</a>
+                <a href="contact.html" id="link-contact">${f.contact}</a>
+                <a href="terms.html" id="link-terms">${f.terms}</a>
+                <a href="privacy.html" id="link-privacy">${f.privacy}</a>
+                <a href="#" id="link-import">${f.imp}</a>
+              </div>
               <div class="footer-inner">
-    <img src="pics/logo.png" alt="Logo" class="footer-logo" />
-    <small>© ${year}</small>
+                <img src="pics/logo.png" alt="Logo" class="footer-logo" />
+                <small>© ${year}</small>
               </div>`;
           }
         }catch{}
@@ -429,6 +528,8 @@
   else if (path.endsWith('article.html'))  document.title = pageTitles[isHe?'he':'en'].articles;
   else if (path.endsWith('about.html'))    document.title = pageTitles[isHe?'he':'en'].about;
   else if (path.endsWith('contact.html'))  document.title = pageTitles[isHe?'he':'en'].contact;
+  else if (path.endsWith('terms.html'))    document.title = pageTitles[isHe?'he':'en'].terms;
+  else if (path.endsWith('privacy.html'))  document.title = pageTitles[isHe?'he':'en'].privacy;
     } catch(e){}
     // Header buttons (if present)
     const bLang = el('#btn-lang'); if (bLang) bLang.addEventListener('click', toggleLang);
@@ -471,31 +572,18 @@
       }
       const selUnits = el('#select-units');
       if (selUnits) {
-        // Localize option labels for English
+        // Show only the ruler icon in both languages (hide text labels)
         try {
-          const isHe = lang()==='he';
-          selUnits.querySelectorAll('option').forEach(opt=>{
-            const en = opt.getAttribute('data-en');
-            if (!isHe && en) opt.textContent = en;
-            if (isHe && en) {
-              // revert to Hebrew already in markup
-            }
-          });
-        } catch{}
+          selUnits.querySelectorAll('option').forEach(opt=>{ opt.textContent = '📏'; });
+        } catch {}
   try { selUnits.value = unit(); } catch{}
   selUnits.addEventListener('change', (e)=>{ setUnit(e.target.value); location.reload(); });
   ensureIconWrap(selUnits, ()=> '📏');
       }
       const selCur = el('#select-currency');
       if (selCur) {
-        // Localize option labels for English
-        try {
-          const isHe = lang()==='he';
-          selCur.querySelectorAll('option').forEach(opt=>{
-            const en = opt.getAttribute('data-en');
-            if (!isHe && en) opt.textContent = en;
-          });
-        } catch{}
+        // Keep only currency symbols (no English words) in all languages
+        try { selCur.querySelectorAll('option').forEach(opt=>{ const v = opt.getAttribute('value')||opt.textContent; opt.textContent = v.trim().charAt(0); }); } catch {}
         // Prefer stored symbol; else derive from currency code
         const sym = (readStr('currencySymbol','')||'').replace(/["'״]/g,'') || symbolFromCurrency(currency());
         try { selCur.value = sym; } catch{}
@@ -519,6 +607,112 @@
         });
       }
     } catch {}
+    // Auth button logic (login/register modal placeholder)
+    try {
+      const btn = document.getElementById('auth-btn');
+      if (btn){
+        const isHe = lang()==='he';
+        const readUser = () => {
+          try { return JSON.parse(localStorage.getItem('authUser')||'null'); } catch { return null; }
+        };
+        const writeUser = (obj) => { try { localStorage.setItem('authUser', JSON.stringify(obj)); } catch{} };
+        const clearUser = () => { try { localStorage.removeItem('authUser'); } catch{} };
+        const refreshBtn = () => {
+          const u = readUser();
+            if (u && u.name){ btn.textContent = isHe ? 'התנתק' : 'Logout'; }
+            else { btn.textContent = isHe ? 'התחברות' : 'Login'; }
+        };
+        refreshBtn();
+        btn.addEventListener('click', ()=>{
+          const u = readUser();
+          if (u && u.name){
+            clearUser();
+            refreshBtn();
+            return;
+          }
+          // Build modal
+          const t = (he,en)=> (isHe?he:en);
+          const modal = document.createElement('div');
+          modal.className = 'global-modal auth-modal';
+          modal.setAttribute('role','dialog');
+          modal.setAttribute('aria-modal','true');
+          modal.innerHTML = `
+            <div class="global-modal-backdrop"></div>
+            <div class="global-modal-box" role="document">
+              <h3 class="global-modal-title">${t('כניסה / הרשמה','Sign in / Register')}</h3>
+              <div class="global-modal-body" style="background:transparent; border:none; padding:0">
+                <form id="auth-form" style="display:flex; flex-direction:column; gap:10px; margin-top:4px">
+                  <input id="auth-name" type="text" placeholder="${t('שם (לרישום חדש)','Name (for new account)')}" style="display:block; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font:inherit" />
+                  <input id="auth-email" type="email" required placeholder="${t('דוא"ל','Email')}" style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font:inherit" />
+                  <input id="auth-pass" type="password" required placeholder="${t('סיסמה','Password')}" style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font:inherit" />
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:4px">
+                    <button type="submit" class="btn primary" id="auth-submit">${t('התחבר','Sign in')}</button>
+                    <button type="button" class="btn" id="auth-toggle" data-mode="login">${t('לחשבון חדש','Create account')}</button>
+                    <button type="button" class="btn" id="auth-cancel">${t('ביטול','Cancel')}</button>
+                  </div>
+                  <p id="auth-status" style="text-align:center; margin:4px 0 0; font-size:14px; color:var(--muted)"></p>
+                </form>
+              </div>
+            </div>`;
+          document.body.appendChild(modal);
+          const close = ()=>{ try{ modal.remove(); }catch{} };
+          modal.querySelector('.global-modal-backdrop')?.addEventListener('click', close);
+          modal.querySelector('#auth-cancel')?.addEventListener('click', close);
+          const form = modal.querySelector('#auth-form');
+          const nameEl = form.querySelector('#auth-name');
+          const emailEl = form.querySelector('#auth-email');
+          const passEl = form.querySelector('#auth-pass');
+          const toggleBtn = form.querySelector('#auth-toggle');
+          const statusEl = form.querySelector('#auth-status');
+          const submitBtn = form.querySelector('#auth-submit');
+          const setMode = (m)=>{
+            if (m==='register'){
+              toggleBtn.dataset.mode='register';
+              submitBtn.textContent = t('רישום','Register');
+              toggleBtn.textContent = t('יש לי כבר חשבון','I have an account');
+              nameEl.style.display='block';
+            } else {
+              toggleBtn.dataset.mode='login';
+              submitBtn.textContent = t('התחבר','Sign in');
+              toggleBtn.textContent = t('לחשבון חדש','Create account');
+              nameEl.style.display='none';
+            }
+          };
+          setMode('login');
+          toggleBtn.addEventListener('click', ()=>{
+            const mode = toggleBtn.dataset.mode==='login' ? 'register' : 'login';
+            setMode(mode);
+          });
+          form.addEventListener('submit', (e)=>{
+            e.preventDefault();
+            statusEl.textContent='';
+            const mode = toggleBtn.dataset.mode==='register' ? 'register' : 'login';
+            const email = (emailEl.value||'').trim();
+            const pass = (passEl.value||'').trim();
+            const name = (nameEl.value||'').trim();
+            if (!email || !pass){ statusEl.textContent = t('אנא מלא דוא"ל וסיסמה','Please provide email and password'); return; }
+            if (mode==='register' && !name){ statusEl.textContent = t('אנא הזן שם','Please enter a name'); return; }
+            // Pseudo-backend: store a single user in localStorage
+            let users = {};
+            try { users = JSON.parse(localStorage.getItem('authUsers')||'{}'); } catch { users = {}; }
+            if (mode==='register'){
+              if (users[email]){ statusEl.textContent = t('משתמש כבר קיים','User already exists'); return; }
+              users[email] = { name: name || email.split('@')[0], pass };
+              try { localStorage.setItem('authUsers', JSON.stringify(users)); } catch{}
+              writeUser({ name: users[email].name, email });
+              refreshBtn();
+              close();
+            } else {
+              if (!users[email] || users[email].pass !== pass){ statusEl.textContent = t('פרטים שגויים','Invalid credentials'); return; }
+              writeUser({ name: users[email].name, email });
+              refreshBtn();
+              close();
+            }
+          });
+          document.addEventListener('keydown', function onK(e){ if (e.key==='Escape'){ close(); document.removeEventListener('keydown', onK);} });
+        });
+      }
+    } catch{}
     // Saw thickness modal in Block 1 (desktop + mobile)
     try{
       const btn = document.getElementById('saw-settings-btn');
@@ -576,8 +770,8 @@
             container.innerHTML = src.map(a=>`<a href="${a.getAttribute('href')||'#'}" class="nav-link${a.classList.contains('active')?' active':''}">${a.textContent||''}</a>`).join('');
           } else if (container){
             const isHe = (document.documentElement.lang||'he')==='he';
-    const fall = isHe
-        ? [
+  const fall = isHe
+    ? [
       ['index.html#index',  'מחשבון חיתוך אופטימלי'],
       ['home.html#tools',   'כלים מרכזיים'],
       ['home.html#guide',   'הסבר מערכת'],
@@ -585,7 +779,7 @@
                   ['plans.html',   'תוכניות בנייה להורדה'],
                   ['articles.html','מאמרים'],
   ['home.html#about',   'אודות'],
-      ['home.html#contact', 'צור קשר']
+    ['contact.html', 'צור קשר']
                 ]
         : [
       ['index.html#index',  'Cut Optimizer'],
@@ -595,7 +789,7 @@
                   ['plans.html',   'Downloadable Plans'],
                   ['articles.html','Articles'],
   ['home.html#about',   'About'],
-      ['home.html#contact', 'Contact']
+    ['contact.html', 'Contact']
                 ];
             container.innerHTML = fall.map(([h,t])=>`<a href="${h}" class="nav-link">${t}</a>`).join('');
           }

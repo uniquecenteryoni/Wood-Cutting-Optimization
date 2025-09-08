@@ -1,6 +1,7 @@
-:root{--bg:#f6f3ef;--card:#fff;--muted:#5b5b5b;--accent:#b57b6d;--primary:#6a8f6b;--head1:#f0eadf;--head2:#e6efe6;--border:#e7e2da;--topbar-h:80px;--nav-h:52px;--sticky-offset:calc(var(--topbar-h) + var(--nav-h));--footer-h:96px}
+:root{--bg:#f6f3ef;--card:#fff;--muted:#5b5b5b;--accent:#b57b6d;--primary:#6a8f6b;--head1:#f0eadf;--head2:#e6efe6;--border:#e7e2da;--topbar-h:80px;--nav-h:52px;--sticky-offset:calc(var(--topbar-h) + var(--nav-h));--footer-h:96px;--page-x:clamp(18px,3vw,56px)}
 /* Headings font: Rubik (EN) + Noto Sans Hebrew Variable (HE) */
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
 @font-face{
 	font-family:'Noto Sans Hebrew Variable';
 	src:url('fonts/NotoSansHebrew-VariableFont_wdth,wght.ttf') format('truetype');
@@ -27,18 +28,21 @@ body{-webkit-tap-highlight-color: transparent}
 h1,h2,h3{font-family:'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial}
 /* Headings bold in both languages */
 html[dir="rtl"] h1, html[dir="rtl"] h2, html[dir="rtl"] h3{font-family:'Noto Sans Hebrew Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:700}
-html[dir="ltr"] h1, html[dir="ltr"] h2, html[dir="ltr"] h3{font-family:'Josefin Sans Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:700}
+html[dir="ltr"] h1, html[dir="ltr"] h2, html[dir="ltr"] h3{font-family:'Roboto', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; font-weight:500}
 h2{font-size:28px}
 h3{font-size:18px}
 html[dir="rtl"] body{ text-align:right }
 html[dir="rtl"] body{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
-html[dir="ltr"] body{font-family:'Josefin Sans Variable', 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
+html[dir="ltr"] body{font-family:'Roboto', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; font-weight:400}
 /* Make English slightly larger to match Hebrew visual weight */
 html[dir="ltr"] body{ font-size: 18px }
 html[dir="rtl"] body{ font-size: 16px }
 html[dir="ltr"] body{ text-align:left }
 html[dir="rtl"] .container, html[dir="rtl"] .card{ text-align:right }
 html[dir="ltr"] .container, html[dir="ltr"] .card{ text-align:left }
+/* Language visibility helpers for bilingual pages */
+html[lang="he"] .lang-en { display: none !important; }
+html[lang="en"] .lang-he { display: none !important; }
 /* Bilingual helpers: show .he in RTL and .en in LTR */
 html[dir="rtl"] .en{ display:none !important }
 html[dir="ltr"] .he{ display:none !important }
@@ -76,7 +80,14 @@ html[dir="ltr"] .he{ display:none !important }
 	/* Ensure emoji/flags render across platforms */
 	font-family: inherit, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
+/* English mode: keep header icons (flag/currency/ruler) regular weight (not bold) */
+html[dir="ltr"] .top-actions select,
+html[dir="ltr"] .top-actions .top-icon{ font-weight:400 !important; }
 .top-actions .btn.select{color:#000}
+/* Auth button: same circular style baseline with subtle distinct background */
+.top-actions #auth-btn{width:auto; min-width:72px; padding:0 14px; border-radius:999px; font-size:14px; font-weight:400; display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid var(--border)}
+.top-actions #auth-btn:hover{background:#faf8f4}
+html[dir="rtl"] .top-actions #auth-btn{order:-1} /* Ensure appears at the far right (visual) in Hebrew */
 /* Make dropdown options readable and centered */
 .top-actions select option{ text-align:center; font-size:16px; }
 /* Nudge icons to ensure dropdown opens downward by giving room below */
@@ -90,7 +101,8 @@ html[dir="ltr"] .he{ display:none !important }
 .container{max-width:100%;width:100%;margin:0 auto;padding:0;display:grid;grid-template-columns:1fr;gap:0}
 .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.04);border:1px solid var(--border); max-width:100%}
 /* Full-bleed page sections: only top-level cards under .container become flat bands */
-.container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:32px 12px}
+/* Unified horizontal padding for all top-level sections below the menu */
+.container > .card{background:var(--card);border:none;border-radius:0;box-shadow:none;padding:32px var(--page-x)}
 .container > .card + .card{border-top:none}
 /* Features (Key Tools) page */
 .features{min-height:calc(100vh - var(--sticky-offset)); display:flex; flex-direction:column; justify-content:center; align-items:center}
@@ -168,9 +180,9 @@ html[dir="rtl"] .card-head .req-saw{left:0;right:auto}
 .btn{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;color:#2b2b2b;font-size:14px;line-height:1.2;transition:background .15s ease, box-shadow .15s ease, transform .05s ease; text-decoration:none}
 .btn{font-weight:100}
 html[dir="rtl"] .btn{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
-html[dir="ltr"] .btn{font-family:'Josefin Sans Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
+html[dir="ltr"] .btn{font-family:'Roboto', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; font-weight:400}
 html[dir="rtl"] #requirements-list .req-row select, html[dir="rtl"] #requirements-list .req-row input{font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
-html[dir="ltr"] #requirements-list .req-row select, html[dir="ltr"] #requirements-list .req-row input{font-family:'Josefin Sans Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100}
+html[dir="ltr"] #requirements-list .req-row select, html[dir="ltr"] #requirements-list .req-row input{font-family:'Roboto', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; font-weight:400}
 .btn:hover{background:#faf8f4;box-shadow:0 2px 6px rgba(0,0,0,.06);transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
 .btn.icon-btn{padding:6px 10px;line-height:1;height:40px;display:inline-flex;align-items:center;justify-content:center}
@@ -300,19 +312,36 @@ html[dir="rtl"] #display-settings-panel label .ds-text-extra{ order:3 }
 .db-table tr.new-row td[contenteditable]:empty::before{ content:attr(data-ph); color:#9aa39a }
 .db-table thead tr:first-child th{background:var(--head1)}
 .db-table thead tr:nth-child(2) th{background:var(--head2)}
-.db-area{overflow-y:auto; overflow-x:hidden; height:50vh; max-height:50vh; padding-top:6px; scrollbar-gutter: stable both-edges; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain}
+/* Two-level sticky header */
+.db-table thead tr:first-child th{position:sticky; top:0; z-index:5}
+.db-table thead tr:nth-child(2) th{position:sticky; top:var(--inv-head1-h, 34px); z-index:4}
+/* Inventory load animation overlay */
+#inventory-load-overlay{position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(255,255,255,.82); backdrop-filter:blur(3px) saturate(120%); z-index:2000; font-family:inherit}
+#inventory-load-overlay .lottie-box{width:160px; height:160px; display:flex; align-items:center; justify-content:center}
+#inventory-load-overlay .success-box{color:#2f8a48; position:relative}
+#inventory-load-overlay .success-svg{width:140px;height:140px;overflow:visible}
+#inventory-load-overlay .success-circle{stroke-dasharray:330; stroke-dashoffset:330; animation:circle-draw .45s ease-out forwards}
+#inventory-load-overlay .success-check{stroke-dasharray:80; stroke-dashoffset:80; animation:check-draw .35s ease-out .38s forwards}
+@keyframes circle-draw{to{stroke-dashoffset:0}}
+@keyframes check-draw{to{stroke-dashoffset:0}}
+#inventory-load-overlay .msg{margin-top:18px; font-size:22px; font-weight:600; text-align:center; color:#2b2b2b}
+@keyframes spin{to{transform:rotate(360deg)}}
+.db-area{overflow:visible; height:50vh; max-height:50vh; padding-top:6px}
+.db-area #db-table-wrap{position:relative; overflow:auto; max-height:100%; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; scrollbar-gutter:stable both-edges}
 .db-area #db-table-wrap:empty{display:block;min-height:0;padding:0;border:none}
-.db-table thead tr:first-child th{position:sticky;top:0;z-index:2}
-.db-table thead tr:nth-child(2) th{position:sticky;top:34px;z-index:1}
+/* (Consolidated above) */
 .actions{margin-top:12px;display:flex;gap:8px}
 .actions-center{justify-content:center}
 .actions-center .btn{font-size:17px;padding:10px 15px}
 .db-head{margin-top:32px}
 #block-req .actions.actions-center{margin-top:32px}
-.footer{padding:16px; text-align:center; color:var(--muted); font-size:24px; min-height:var(--footer-h); display:flex; align-items:center; justify-content:center}
+.footer{padding:16px; text-align:center; color:var(--muted); font-size:24px; min-height:var(--footer-h); display:flex; flex-direction:column; align-items:center; justify-content:center}
 .footer .footer-inner{display:inline-flex; gap:16px; align-items:center; height:var(--footer-h)}
 /* Make logo fill 85% of footer height */
-.footer .footer-logo{height:calc(0.85 * var(--footer-h)); width:auto; object-fit:contain; border-radius:2px}
+.footer .footer-logo{height:calc(0.476 * var(--footer-h)); width:auto; object-fit:contain; border-radius:2px}
+.footer .footer-links{display:flex; gap:16px; justify-content:center; align-items:center; margin-bottom:8px; font-size:.6em}
+.footer .footer-links a{color:inherit; text-decoration:none; border-bottom:1px solid transparent}
+.footer .footer-links a:hover{border-bottom-color: currentColor}
 .file-btn input{display:none}
 .file-btn{display:inline-flex;align-items:center;gap:8px}
 .file-btn span{font:inherit}
@@ -444,6 +473,8 @@ html[dir="ltr"] .feat-bool .title{order:1}
 .container > .card.about-wrap{padding-left:clamp(24px, 8vw, 88px); padding-right:clamp(24px, 8vw, 88px)}
 .about-wrap .about-text{grid-area:text;padding-inline:0; max-width: 48ch}
 .about-wrap .about-photo{grid-area:photo; display:flex}
+.about-wrap .section-head{margin:28px 0 6px; font-size:1.15em; font-weight:600; letter-spacing:.5px}
+.about-wrap p{line-height:1.55; margin:0 0 14px}
 .about-photo img{width:100%;height:100%;object-fit:cover;border-radius:12px;border:1px solid var(--border);display:block}
 .about-text h2{margin-top:0}
 .about-meta{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
@@ -614,7 +645,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .switch[data-on="1"] .knob{left:22px}
 .help-icon{display:inline-block;width:16px;height:16px;border:1px solid #ccc;background:#f0f0f0;border-radius:50%;text-align:center;line-height:14px;font-size:12px;color:#000;cursor:help;margin-left:4px;vertical-align:middle}
 .req input[data-field], .req select[data-field]{font-size:14px; font-family:'Noto Sans Hebrew Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial; line-height:1.2; padding:12px 12px; vertical-align:middle; font-weight:100; color:#2b2b2b;}
-html[dir="ltr"] .req input[data-field], html[dir="ltr"] .req select[data-field]{font-family:'Josefin Sans Variable','Rubik', system-ui, -apple-system, Segoe UI, Roboto, Arial; font-weight:100;}
+html[dir="ltr"] .req input[data-field], html[dir="ltr"] .req select[data-field]{font-family:'Roboto', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; font-weight:400;}
 .initial-compact .display-settings-panel { flex-wrap: wrap !important; width: 100% !important; max-width: none !important; flex-direction: row !important; }
 /* Block 1 inline settings row: unify input styling with the rest of the site */
 #saw-settings-row input[type="number"],
@@ -679,8 +710,9 @@ html[dir="ltr"] .req input[data-field], html[dir="ltr"] .req select[data-field]{
 
 /* Make main blocks edge-to-edge on mobile (no side gutters under the header) */
 @media(max-width:900px){
+	/* Keep symmetric, slightly smaller padding on mobile instead of zero */
 	.container{ padding-left:0; padding-right:0 }
-	.container > .card{ padding-left:0; padding-right:0 }
+	.container > .card{ padding-left:clamp(14px,4vw,28px); padding-right:clamp(14px,4vw,28px) }
 }
 /* Keep DB area from creating horizontal page scroll; only inner #db-table-wrap may scroll X */
 .db-area{overflow-y:auto; overflow-x:hidden}

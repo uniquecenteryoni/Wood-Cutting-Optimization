@@ -1,5 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Core state from storage (with safe fallbacks)
+    // Fallback stub if guillotine solver script missing
+    if (typeof optimizeCuttingAllGroups !== 'function') {
+        window.optimizeCuttingAllGroups = function(userReqs, plateDB, params){
+            console.warn('[stub] optimizeCuttingAllGroups missing; returning empty plan');
+            return [];
+        };
+    }
     let language = loadData('lang') || 'he';
     let unitSystem = loadData('unitSystem') || 'metric';
     let currency = loadData('currencySymbol') || '€';
@@ -8,32 +15,81 @@ document.addEventListener('DOMContentLoaded', () => {
     let inventoryUnits = loadData('inventoryUnits') || [];
     let inventoryData = loadData('inventoryData') || [];
     let inventoryPriceCurrencyUnit = loadData('inventoryPriceCurrencyUnit') || currency;
+    try { fetchLiveRates('€'); } catch(_){}
 
-    // Minimal translations used across the UI
+    // Translations used across the calculator UI
     const translations = {
         he: {
-            showDb: 'הצג מלאי',
-            save: 'שמור',
+            // generic
             ok: 'אישור',
+            save: 'שמור',
+            cancel: 'בטל',
+            edit: 'עריכה',
+            delete: 'הסר',
+            duplicate: 'שכפל',
+            remove: 'הסר',
+            // top area
+            sawThickness: 'עובי מסור',
+            projectName: 'שם הפרויקט',
+            reqs: 'דרישות פרויקט',
+            addReq: 'הוסף דרישה',
+            calcOpt: 'חשב אופטימיזציה',
+            // inventory block
+            db: 'מלאי',
+            addTree: 'הוסף פריט',
+            showDb: 'הצג מלאי',
+            hideDb: 'הסתר מלאי',
+            loadFile: 'טען קובץ (.xlsx, .xls, .csv)',
+            // results/export
+            results: 'תוצאות',
+            noResults: 'אין תוצאות עדיין. לחץ "חשב אופטימיזציה" כדי להתחיל.',
+            exportPdf: 'שמור כ-PDF',
+            // display panel
             extraInfo: 'מידע נוסף',
             tags: 'תגיות',
             fontSize: 'גודל גופן',
             regular: 'רגיל',
             bold: 'בולט',
             displaySettingsTitle: 'הגדרות תצוגה',
-            compressedView: 'תצוגה מצומצמת'
+            compressedView: 'תצוגה מצומצמת',
+            savedProjects: 'פרויקטים שמורים',
+            selectProject: 'בחר פרויקט'
         },
         en: {
-            showDb: 'Show Inventory',
-            save: 'save',
+            // generic
             ok: 'OK',
+            save: 'Save',
+            cancel: 'Cancel',
+            edit: 'Edit',
+            delete: 'Delete',
+            duplicate: 'Duplicate',
+            remove: 'Remove',
+            // top area
+            sawThickness: 'Saw kerf',
+            projectName: 'Project name',
+            reqs: 'Project Requirements',
+            addReq: 'Add requirement',
+            calcOpt: 'Calculate optimization',
+            // inventory block
+            db: 'Inventory',
+            addTree: 'Add item',
+            showDb: 'Show Inventory',
+            hideDb: 'Hide Inventory',
+            loadFile: 'Load file (.xlsx, .xls, .csv)',
+            // results/export
+            results: 'Results',
+            noResults: 'No results yet. Press "Calculate Optimization" to start.',
+            exportPdf: 'Save as PDF',
+            // display panel
             extraInfo: 'Extra info',
             tags: 'Tags',
             fontSize: 'Font size',
             regular: 'Regular',
             bold: 'Bold',
             displaySettingsTitle: 'Display settings',
-            compressedView: 'Compressed view'
+            compressedView: 'Compressed view',
+            savedProjects: 'Saved projects',
+            selectProject: 'Select project'
         }
     };
 
@@ -111,13 +167,15 @@ function ensureInventorySeeded() {
     if (Array.isArray(inventoryRows) && inventoryRows.length > 0) return;
     const he = (language === 'he');
     // כותרות ברירת מחדל
-    const hdr = he ? ['חומר','סוג','סיווג','עובי','רוחב','אורך','מחיר','מחיר למטר','ספק']
-                   : ['Material','Type','Classification','Thickness','Width','Length','Price','Price per meter','Supplier'];
+    // Updated default order: Material first; Supplier now placed before Price per meter
+    // Hebrew file upload will follow: חומר, סוג, סיווג, עובי, רוחב, אורך, מחיר, ספק, מחיר למטר
+    const hdr = he ? ['חומר','סוג','סיווג','עובי','רוחב','אורך','מחיר','ספק','מחיר למטר']
+                   : ['Material','Type','Classification','Thickness','Width','Length','Price','Supplier','Price per meter'];
     // יחידות ברירת מחדל: עובי/רוחב ב־mm, אורך ב־m, מחירים — מטבע נוכחי
     const sym = document.getElementById('select-currency')?.value || normalizeCurrencySymbol(inventoryPriceCurrencyUnit) || '€';
     const units = he
-        ? ['', '', '', 'מ״מ', 'מ״מ', 'מ׳', sym, sym, '']
-        : ['', '', '', 'mm',  'mm',  'm',  sym, sym, ''];
+        ? ['', '', '', 'מ״מ', 'מ״מ', 'מ׳', sym, '', sym]
+        : ['', '', '', 'mm',  'mm',  'm',  sym, '', sym];
     inventoryRows = [hdr, units];
     inventoryHeaders = hdr.slice();
     inventoryUnits = units.slice();
@@ -502,8 +560,12 @@ function formatNumber(val) {
     return n.toFixed(2);
 }
 
-// המרת מטבעות לתצוגה (דמו): ערכים יחסיים ל-€; החישובים נשמרים בבסיס הקובץ
-const currencyRates = { '€': 1, '$': 1.1, '₪': 4.0 };
+// Live FX rates (cached). Fallback to static if network blocked.
+const FX_CACHE_KEY = 'fxRatesV1';
+const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+// Currency symbol/code maps (declared early to avoid TDZ issues)
+var SYM_TO_CODE = { '€': 'EUR', '$': 'USD', '₪': 'ILS' };
+var CODE_TO_SYM = { 'EUR': '€', 'USD': '$', 'ILS': '₪' };
 function normalizeCurrencySymbol(s) {
     const t = String(s || '').trim().toLowerCase();
     if (!t) return '€';
@@ -512,21 +574,68 @@ function normalizeCurrencySymbol(s) {
     if (t.includes('€') || t.includes('eur') || t.includes('euro')) return '€';
     return (t === '$' || t === '€' || t === '₪') ? t.toUpperCase() : '€';
 }
+function getCachedRates(baseSym) {
+    try {
+        const raw = loadData(FX_CACHE_KEY);
+        if (!raw) return null;
+        const now = Date.now();
+        if (!raw.timestamp || (now - raw.timestamp) > FX_CACHE_TTL_MS) return null;
+        if (!raw.base || raw.base !== baseSym) return null;
+        return raw;
+    } catch(_) { return null; }
+}
+async function fetchLiveRates(baseSym) {
+    try { if(!SYM_TO_CODE || !CODE_TO_SYM){ SYM_TO_CODE = { '€':'EUR', '$':'USD', '₪':'ILS' }; CODE_TO_SYM = { 'EUR':'€','USD':'$','ILS':'₪' }; } } catch(e){ /* noop */ }
+    const baseCode = (SYM_TO_CODE && SYM_TO_CODE[normalizeCurrencySymbol(baseSym)]) || 'EUR';
+    const url = `https://api.exchangerate.host/latest?base=${encodeURIComponent(baseCode)}&symbols=EUR,USD,ILS`;
+    try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fx http ' + res.status);
+        const data = await res.json();
+        const rates = data && data.rates ? data.rates : null;
+        if (!rates) throw new Error('fx bad body');
+        const norm = {};
+        Object.keys(rates).forEach(code => { const sym = CODE_TO_SYM[code]; if (sym) norm[sym] = Number(rates[code]); });
+        const payload = { base: CODE_TO_SYM[baseCode] || '€', rates: norm, timestamp: Date.now() };
+        saveData(FX_CACHE_KEY, payload);
+        return payload;
+    } catch (e) {
+        return null;
+    }
+}
+function getFxRates(baseSym) {
+    const cached = getCachedRates(baseSym);
+    if (cached) return cached;
+    // Kick off background refresh; caller can fallback to defaults immediately
+    try { fetchLiveRates(baseSym); } catch(_){ }
+    // Fallback static multipliers relative to €
+    return { base: '€', rates: { '€': 1, '$': 1.08, '₪': 3.95 }, timestamp: 0 };
+}
 function convertCurrency(value, fromSymbol, toSymbol) {
     const v = Number(value);
     const from = normalizeCurrencySymbol(fromSymbol);
     const to = normalizeCurrencySymbol(toSymbol);
-    if (!isFinite(v) || !currencyRates[from] || !currencyRates[to]) return value;
-    const eurVal = v / currencyRates[from];
-    return eurVal * currencyRates[to];
+    if (!isFinite(v)) return value;
+    const fx = getFxRates('€'); // store and compute vs EUR
+    const rates = fx && fx.rates ? fx.rates : { '€':1, '$':1.08, '₪':3.95 };
+    const rFrom = (from === '€') ? 1 : (rates[from] || NaN);
+    const rTo = (to === '€') ? 1 : (rates[to] || NaN);
+    if (!isFinite(rFrom) || !isFinite(rTo)) return value;
+    const eurVal = v / rFrom;
+    return eurVal * rTo;
 }
 
 // רנדר טבלת מאגר העצים
 function renderInventoryTable() {
-    const wrap = document.getElementById('db-table-wrap');
+    // Prefer dashboard hosted table (clone) if present, fallback to main app one
+    const wrap = (document.getElementById('dash-db-area')?.querySelector('#db-table-wrap')) || document.getElementById('db-table-wrap');
     if (!wrap) return;
+    // If nothing seeded yet, attempt to seed default structure so user sees headers immediately
     if (!inventoryRows || inventoryRows.length === 0) {
-        // No data yet — show a friendly empty state
+        try { if (typeof ensureInventorySeeded === 'function') ensureInventorySeeded(); } catch {}
+    }
+    if (!inventoryRows || inventoryRows.length === 0) {
+        // Still no data (should be rare) – show minimal friendly state
         const msg = language === 'he' ? 'לא נטען קובץ.' : 'No file loaded.';
         wrap.innerHTML = `<p style="color:#666;margin:8px 0;text-align:center">${msg}</p>`;
         return;
@@ -583,10 +692,14 @@ function renderInventoryTable() {
     const unitChoicesMetric = language==='he' ? ['מ״מ','ס״מ','מ׳'] : ['mm','cm','m'];
     const unitChoicesImperial = language==='he' ? ['אינץ׳'] : ['inch'];
     function unitDropdown(i){
-        // currencies
-        if (i===priceIdx2 || i===ppmIdx2){
-            const curSym = document.getElementById('select-currency')?.value || normalizeCurrencySymbol(inventoryPriceCurrencyUnit) || '€';
+        // currencies: Price editable, Price-per-meter locked to Price
+        const curSym = document.getElementById('select-currency')?.value || normalizeCurrencySymbol(inventoryPriceCurrencyUnit) || '€';
+        if (i===priceIdx2){
             return `<select class="unit-select" data-kind="currency" data-col="${i}">${['€','$','₪'].map(s=>`<option value="${s}" ${curSym===s?'selected':''}>${s}</option>`).join('')}</select>`;
+        }
+        if (i===ppmIdx2){
+            // Locked: follow Price column
+            return `${curSym}`;
         }
         if (!(i===thIdx2 || i===wIdx2 || i===lenIdx2)) return displayUnits[i] ?? '';
         const opts = (unitSystem==='imperial') ? unitChoicesImperial : unitChoicesMetric;
@@ -675,6 +788,14 @@ function renderInventoryTable() {
         <tbody>${tbody}</tbody>
       </table>
     `;
+        // Compute first header row height for correct sticky offset
+        try {
+            const h1 = wrap.querySelector('.db-table thead tr:first-child');
+            if (h1) {
+                const h = h1.getBoundingClientRect().height;
+                document.documentElement.style.setProperty('--inv-head1-h', h + 'px');
+            }
+        } catch(_){ }
         // Reset scroll to the logical start (right in RTL, left in LTR)
         scrollToStart(wrap, tableDir);
         // Wire unit-select changes for per-column units and currency
@@ -685,22 +806,33 @@ function renderInventoryTable() {
                     const col = Number(el.getAttribute('data-col'));
                     const kind = el.getAttribute('data-kind') || 'unit';
                     if (!isFinite(col)) return;
-                                        if (kind === 'currency') {
-                                                const sym = normalizeCurrencySymbol(el.value || '€');
-                                                // Treat as display currency selection only — don't change source currency
-                                                const selCurrency = document.getElementById('select-currency');
-                                                if (selCurrency) { try { selCurrency.value = sym; } catch{} }
-                                                saveData('currencySymbol', sym);
-                                                try { saveData('currency', sym==='€'?'EUR':sym==='$'?'USD':sym==='₪'?'ILS':'EUR'); } catch{}
-                                                try { const btnCur = document.getElementById('btn-currency'); if (btnCur) btnCur.textContent = sym; } catch{}
-                                                // Re-render table and results to reflect new target currency
-                                                renderInventoryTable();
-                                                try {
-                                                    const area = document.getElementById('results-area');
-                                                    if (area && area.childElementCount) { const res = computeOptimization(); renderResults(res); }
-                                                } catch{}
-                                                return;
-                                        }
+                    if (kind === 'currency') {
+                        const sym = normalizeCurrencySymbol(el.value || '€');
+                        // Treat as display currency selection only — don't change source currency
+                        const selCurrency = document.getElementById('select-currency');
+                        if (selCurrency) { try { selCurrency.value = sym; } catch(e){} }
+                        saveData('currencySymbol', sym);
+                        try { saveData('currency', sym==='€'?'EUR':sym==='$'?'USD':sym==='₪'?'ILS':'EUR'); } catch(e){}
+                        try { const btnCur = document.getElementById('btn-currency'); if (btnCur) btnCur.textContent = sym; } catch(e){}
+                        // Keep Price and Price-per-meter units in sync and locked
+                        try {
+                            const pIdx = getPriceColIndex();
+                            const ppmIdx = getPricePerMeterColIndex();
+                            if (isFinite(pIdx) && pIdx >= 0) {
+                                if (!Array.isArray(inventoryUnits)) inventoryUnits = [];
+                                inventoryUnits[pIdx] = sym;
+                                if (isFinite(ppmIdx) && ppmIdx >= 0) inventoryUnits[ppmIdx] = sym;
+                                saveData('inventoryUnits', inventoryUnits);
+                            }
+                        } catch(e){}
+                        // Re-render table and results to reflect new target currency
+                        renderInventoryTable();
+                        try {
+                            const area = document.getElementById('results-area');
+                            if (area && area.childElementCount) { const res = computeOptimization(); renderResults(res); }
+                        } catch(e){}
+                        return;
+                    }
                     // Dimension units: rescale numeric values in that column to match the newly selected unit
                     const prevUnit = inventoryUnits[col] || '';
                     const nextUnit = el.value;
@@ -764,10 +896,47 @@ function setInventoryFromArray2D(arr) {
     const hdr = arr[0] || [];
     const units = arr[1] || [];
     const body = arr.slice(2).filter(r => !isEmpty(r));
+    // Normalize expected order: Material, Type, Classification, Thickness, Width, Length, Price, Supplier, Price per meter
+    try {
+        // Map normalized (lower) header names
+        const norm = s => String(s||'').trim().toLowerCase();
+        const target = ['material','type','classification','thickness','width','length','price','supplier','price per meter'];
+        // Detect if we have all required names (in either Hebrew or English) but maybe different order
+        const nameMap = {
+            'חומר':'material','material':'material',
+            'סוג':'type','type':'type','tree type':'type','סוג עץ':'type',
+            'סיווג':'classification','classification':'classification',
+            'עובי':'thickness','thickness':'thickness',
+            'רוחב':'width','width':'width',
+            'אורך':'length','length':'length',
+            'מחיר':'price','price':'price',
+            'ספק':'supplier','supplier':'supplier',
+            'מחיר למטר':'price per meter','price per meter':'price per meter'
+        };
+        const mapped = hdr.map(h=>nameMap[norm(h)]||null);
+        if (mapped.filter(Boolean).length >= 7) { // enough columns recognized
+            // Build an object per column
+            const cols = hdr.map((h,i)=>({origIndex:i, key:mapped[i], header:h, unit:units[i], data: body.map(r=>r[i]) }));
+            // Reconstruct in target order preserving original header labels where possible
+            const reordered = [];
+            target.forEach(k=>{
+                const c = cols.find(col=>col.key===k);
+                if (c) reordered.push(c);
+            });
+            // Append any extra unknown columns at end
+            cols.forEach(c=>{ if (!target.includes(c.key)) reordered.push(c); });
+            if (reordered.length === cols.length) {
+                inventoryHeaders = reordered.map(c=>c.header);
+                inventoryUnits = reordered.map(c=>c.unit);
+                inventoryData = body.map((_,rowIdx)=> reordered.map(c=>c.data[rowIdx]));
+            }
+        }
+    } catch(_){ }
     inventoryRows = [hdr, units, ...body];
-    inventoryHeaders = hdr;
-    inventoryUnits = units;
-    inventoryData = body;
+    // If we reordered, inventoryHeaders/inventoryUnits/inventoryData already set.
+    if (!inventoryHeaders || inventoryHeaders.length===0) inventoryHeaders = hdr;
+    if (!inventoryUnits || inventoryUnits.length===0) inventoryUnits = units;
+    if (!inventoryData || inventoryData.length===0) inventoryData = body;
     // If Material column missing, append it with blank units and cells
     const matIdxNow = getMaterialColIndex();
     if (matIdxNow < 0) {
@@ -793,9 +962,50 @@ function setInventoryFromArray2D(arr) {
         try { selCurrency.value = normalizeCurrencySymbol(inventoryPriceCurrencyUnit); } catch{}
         saveData('currencySymbol', normalizeCurrencySymbol(inventoryPriceCurrencyUnit));
     }
+    // Ensure Price-per-meter column uses the same currency symbol as Price and stays locked
+    try {
+        const ppmIdx = getPricePerMeterColIndex();
+        if (ppmIdx >= 0) {
+            if (!Array.isArray(inventoryUnits)) inventoryUnits = [];
+            inventoryUnits[ppmIdx] = normalizeCurrencySymbol(inventoryPriceCurrencyUnit);
+            saveData('inventoryUnits', inventoryUnits);
+        }
+    } catch(_){ }
     renderInventoryTable();
     refreshRequirementTypeOptions();
-    showDbStatus(language === 'he' ? 'המלאי נטען בהצלחה' : 'Inventory loaded successfully');
+    // Show simple inline success animation (CSS/SVG) similar to loading style (no external libs)
+    (function(){
+        const txt = language === 'he' ? 'המלאי נטען בהצלחה' : 'Inventory loaded successfully';
+        // Remove green bottom status (no longer needed)
+        try { const st = document.getElementById('db-status'); st && st.remove(); } catch(_){ }
+        let ov = document.getElementById('inventory-load-overlay');
+        if (!ov){
+            ov = document.createElement('div');
+            ov.id = 'inventory-load-overlay';
+            // Container for lottie animation
+            ov.innerHTML = '<div class="lottie-box" aria-hidden="true"></div><div class="msg" role="status" aria-live="polite"></div>';
+            document.body.appendChild(ov);
+        }
+    const msgEl = ov.querySelector('.msg');
+    if (msgEl){ msgEl.textContent = txt; msgEl.style.opacity='0'; }
+    ov.style.display='flex';
+        // Build inline SVG + stroke-draw animation (no dependencies)
+        try {
+            const box = ov.querySelector('.lottie-box');
+            if (box){
+                box.classList.add('success-box');
+                box.innerHTML = '<svg class="success-svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-hidden="true"><circle class="success-circle" cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path class="success-check" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" d="M34 63 L52 80 L88 42"/></svg>';
+            }
+            // Delay showing text by 500ms
+            if (msgEl){ setTimeout(()=>{ try{ msgEl.style.transition='opacity .25s'; msgEl.style.opacity='1'; }catch(_){ } }, 300); }
+            // Color & timing via CSS (added below if not present)
+            setTimeout(()=>{ try{ ov.style.opacity='0'; ov.style.transition='opacity .35s'; }catch(_){ } }, 900);
+            setTimeout(()=>{ try{ ov.remove(); }catch(_){ } }, 1300);
+        } catch(_){
+            setTimeout(()=>{ try{ ov.style.opacity='0'; ov.style.transition='opacity .3s'; }catch(_){ } }, 400);
+            setTimeout(()=>{ try{ ov.remove(); }catch(_){ } }, 800);
+        }
+    })();
     // Auto-open DB area after load to show the table
     const area = document.getElementById('db-area');
     const toggleDbBtn = document.getElementById('toggle-db');
@@ -2774,6 +2984,17 @@ if (selCurrency) {
     selCurrency.addEventListener('change', ()=>{
         const sym = normalizeCurrencySymbol(selCurrency.value || '€');
         saveData('currencySymbol', sym);
+        // Align ppm column and refresh FX if needed
+        try {
+            const ppmIdx = getPricePerMeterColIndex();
+            const pIdx = getPriceColIndex();
+            if (ppmIdx >= 0) {
+                if (!Array.isArray(inventoryUnits)) inventoryUnits = [];
+                inventoryUnits[ppmIdx] = sym; if (pIdx>=0) inventoryUnits[pIdx] = sym;
+                saveData('inventoryUnits', inventoryUnits);
+            }
+        } catch(_){ }
+    try { fetchLiveRates('€'); } catch(_){ }
         switchCurrency(sym);
     });
 }
@@ -3072,8 +3293,7 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
     const mainEl = document.querySelector('main');
     let anim = null;
     const showLoader = () => {
-    overlay.classList.remove('hidden');
-        overlay.setAttribute('aria-hidden','false');
+    if(overlay){ overlay.classList.remove('hidden'); overlay.setAttribute('aria-hidden','false'); }
     if (mainEl) mainEl.setAttribute('aria-busy','true');
     // Default: show spinner until Lottie signals DOMLoaded
     if (spinner) spinner.style.display = '';
@@ -3149,15 +3369,104 @@ if (calcBtn) calcBtn.addEventListener('click', () => {
     setTimeout(() => {
         renderResults(res);
         hideLoader();
-        // Auto-scroll the Results block so the title is at the top of the viewport
         try {
-            const resTitle = document.querySelector('#block-res h2');
+            const dashRes = document.querySelector('#dash-block-res');
+            const mainRes = document.querySelector('#block-res');
+            const resTitle = dashRes ? (dashRes.querySelector('h3')||dashRes.querySelector('h2')) : (mainRes ? mainRes.querySelector('h2') : null);
+            if(dashRes){ dashRes.style.display='block'; }
             resTitle && resTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch {}
-    // Reset horizontal scroll positions inside results
-    try { document.querySelectorAll('#results-area .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch{}
+        try { document.querySelectorAll('#results-area .x-scroll').forEach(sc => sc.scrollLeft = 0); } catch{}
     }, remaining);
 });
+
+// Expose selected inventory helpers for external (dashboard) reuse without modifying internal logic
+try {
+    if (typeof window !== 'undefined') {
+        window.renderInventoryTable = window.renderInventoryTable || renderInventoryTable;
+        window.ensureInventorySeeded = window.ensureInventorySeeded || ensureInventorySeeded;
+        window.setInventoryFromArray2D = window.setInventoryFromArray2D || setInventoryFromArray2D;
+        window.handleFile = window.handleFile || handleFile;
+        // Rich inventory row action API for dashboard usage
+        if(!window.inventoryActions){
+            window.inventoryActions = {
+                deleteRow(idx){
+                    if(!isFinite(idx)) return; 
+                    try { inventoryData.splice(idx,1); saveData('inventoryData', inventoryData); renderInventoryTable(); } catch(_){ }
+                },
+                editRow(idx){
+                    if(!isFinite(idx)) return;
+                    try { editingRows.add(idx); renderInventoryTable(); } catch(_){ }
+                },
+                cancelEdit(idx){
+                    if(!isFinite(idx)) return;
+                    try { editingRows.delete(idx); renderInventoryTable(); } catch(_){ }
+                },
+                saveRow(idx, tr){
+                    if(!isFinite(idx) || !tr) return;
+                    try {
+                        const newVals = inventoryHeaders.map((_, i) => {
+                            const td = tr.querySelector(`td[data-col="${i}"]`);
+                            if (!td) return inventoryData[idx][i];
+                            const sel = td.querySelector('select');
+                            if (sel) return sel.value;
+                            return td.textContent.trim();
+                        });
+                        const priceIdx = getPriceColIndex();
+                        const ppmIdx = getPricePerMeterColIndex();
+                        const lenIdx = getColumnIndex(['length','אורך']);
+                        if (ppmIdx >= 0 && priceIdx >= 0 && lenIdx >= 0) {
+                            const priceRaw = newVals[priceIdx];
+                            const price = isFinite(Number(priceRaw)) ? Number(priceRaw) : 0;
+                            const lenUnit = inventoryUnits[lenIdx] || '';
+                            const lenMeters = lengthToMeters(newVals[lenIdx], lenUnit);
+                            if (isFinite(price) && isFinite(lenMeters) && lenMeters > 0) {
+                                newVals[ppmIdx] = (price / lenMeters).toFixed(2);
+                            }
+                        }
+                        inventoryData[idx] = newVals;
+                        saveData('inventoryData', inventoryData);
+                        editingRows.delete(idx);
+                        renderInventoryTable();
+                    } catch(_){ }
+                },
+                saveNewRow(tr){
+                    if(!tr) return;
+                    try {
+                        const colsCount = inventoryHeaders.length;
+                        const newVals = Array.from({ length: colsCount }).map((_, i) => {
+                            const td = tr.querySelector(`td[data-col="${i}"]`);
+                            if (!td) return '';
+                            const sel = td.querySelector('select');
+                            if (sel) return sel.value;
+                            return td.textContent.trim();
+                        });
+                        if (newVals.some(v => String(v).trim() !== '')) {
+                            const priceIdx = getPriceColIndex();
+                            const ppmIdx = getPricePerMeterColIndex();
+                            const lenIdx = getColumnIndex(['length','אורך']);
+                            if (ppmIdx >= 0 && priceIdx >= 0 && lenIdx >= 0) {
+                                const priceRaw2 = newVals[priceIdx];
+                                const price = isFinite(Number(priceRaw2)) ? Number(priceRaw2) : 0;
+                                const lenUnit = inventoryUnits[lenIdx] || '';
+                                const lenMeters = lengthToMeters(newVals[lenIdx], lenUnit);
+                                if (isFinite(price) && isFinite(lenMeters) && lenMeters > 0) {
+                                    newVals[ppmIdx] = (price / lenMeters).toFixed(2);
+                                }
+                            }
+                            inventoryData.unshift(newVals);
+                            saveData('inventoryData', inventoryData);
+                        }
+                        showNewInventoryRow = false;
+                        renderInventoryTable();
+                    } catch(_){ }
+                },
+                cancelNew(){ try { showNewInventoryRow = false; renderInventoryTable(); } catch(_){ } },
+                addNewRow(){ try { ensureInventorySeeded(); showNewInventoryRow = true; renderInventoryTable(); } catch(_){ } }
+            };
+        }
+    }
+} catch(_){ }
 
 const toggleDbBtn = document.getElementById('toggle-db');
 if (toggleDbBtn) {
@@ -3661,26 +3970,8 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
 
 // האזור לסטטוס טעינת מאגר
 function showDbStatus(msg) {
-    const block = document.getElementById('block-db');
-    if (!block) return;
-    // show status only if there is any data in inventory
-    const hasData = Array.isArray(inventoryData) && inventoryData.length > 0;
-    if (!hasData) {
-        const old = document.getElementById('db-status');
-        if (old) old.remove();
-        return;
-    }
-    let status = document.getElementById('db-status');
-    if (!status) {
-        // יתכן והמשתמש טרם ביקר בבלוק הזה — ניצור זמנית מתחת לכותרת
-        const head = block.querySelector('.card-head');
-        status = document.createElement('div');
-        status.id = 'db-status';
-        status.style.marginTop = '8px';
-        status.style.color = '#2e7d32';
-        head?.appendChild(status);
-    }
-    status.textContent = msg;
+    // Suppressed per new requirement: remove existing status and do not recreate
+    try { const old = document.getElementById('db-status'); old && old.remove(); } catch(_){ }
 }
 
 // האזנה לשינויים בשדות הדרישות כדי לייצר תלות בין סוג -> עובי -> רוחב
